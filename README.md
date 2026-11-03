@@ -86,19 +86,27 @@ node "study-mate/app/server.mjs" --workspace "$env:USERPROFILE\StudyMate" --open
 node "study-mate/app/server.mjs" --workspace "StudyMate" --port 8080 --no-open
 ```
 
-### 3. 装进 Trae CN 左侧活动栏（可选）
+### 3. 做一个「学习搭档」桌面图标（推荐）
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-做三件事：
+安装脚本会做四件事：
 
 1. 技能复制到 `%USERPROFILE%\.trae-cn\plugins\local\study-mate\0.1.0`（任意项目都能对话调用）；
-2. VS Code 扩展复制到 `%USERPROFILE%\.trae-cn\extensions\studymate.study-mate-view-0.1.0`（左侧活动栏入口，自动拉起阅读端）；
-3. 首次安装把示例工作区放到 `%USERPROFILE%\StudyMate`（已存在则不动）。
+2. VS Code 扩展复制到 `%USERPROFILE%\.trae-cn\extensions\studymate.study-mate-view-0.1.0`；
+3. 首次安装把示例工作区放到 `%USERPROFILE%\StudyMate`（已存在则不动）；
+4. 在桌面放一个 **「学习搭档」** 快捷方式：双击启动本地阅读端（已在跑就复用）并打开界面。
 
-装完**完全退出 Trae CN 再打开**，左侧活动栏出现「学习搭档」图标；没出现就在命令面板执行 `Developer: Reload Window`。视图标题栏还有「在浏览器中打开」和「重启服务」。
+> **关于 Trae CN 左侧栏**：当前版本的 Trae CN 不加载第三方扩展的界面部分（活动栏视图、命令、状态栏都不会出现），所以「左侧工具栏图标」这条路在这个版本上走不通。桌面图标 / 浏览器版功能完全一样。
+> 扩展本体是标准 VS Code 扩展，在 VS Code、Cursor 里装上即可出现在活动栏左侧；Trae 后续版本若支持，同样可以直接用。
+
+只想手动开也行，不用装任何东西：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "study-mate/run.ps1"
+```
 
 ### 4. 日常学习循环
 

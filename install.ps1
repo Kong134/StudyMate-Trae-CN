@@ -29,7 +29,19 @@ Copy-Item (Join-Path $src "extension\*") $extTarget -Recurse -Force
 Copy-Item (Join-Path $src "app") (Join-Path $extTarget "app") -Recurse -Force
 Write-Host "VS Code 扩展已安装到：$extTarget" -ForegroundColor Green
 
-# 3) 示例工作区（首次）
+# 3) 桌面快捷方式：双击即打开学习界面
+$runScript = Join-Path $target "run.ps1"
+$lnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "学习搭档.lnk"
+$shell = New-Object -ComObject WScript.Shell
+$sc = $shell.CreateShortcut($lnk)
+$sc.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$sc.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$runScript`""
+$sc.WorkingDirectory = Split-Path $runScript
+$sc.Description = "打开学习搭档（本地学习界面）"
+$sc.Save()
+Write-Host "桌面快捷方式已创建：$lnk" -ForegroundColor Green
+
+# 4) 示例工作区（首次）
 if (-not $SkipDemo) {
   $ws = Join-Path $env:USERPROFILE "StudyMate"
   if (-not (Test-Path $ws)) {
@@ -41,8 +53,8 @@ if (-not $SkipDemo) {
 }
 
 Write-Host ""
+Write-Host ""
 Write-Host "接下来：" -ForegroundColor Cyan
-Write-Host "1. 完全退出 Trae CN 再重新打开（扩展只在启动时加载）。"
-Write-Host "2. 左侧活动栏会出现「学习搭档」图标，点开即进入学习界面。"
-Write-Host "3. 若图标没出现：命令面板（Ctrl+Shift+P）搜索 'Developer: Reload Window' 重载一次。"
-Write-Host "4. 也可以直接跑：node ""$extTarget\app\server.mjs"" --workspace ""$env:USERPROFILE\StudyMate"" --open"
+Write-Host "1. 双击桌面上的「学习搭档」图标，即打开学习界面（工作区：$(Join-Path $env:USERPROFILE 'StudyMate')）。"
+Write-Host "2. 当前版本 Trae CN 不加载第三方扩展界面，左侧栏不会出现图标；VS Code / Cursor 里装同一扩展即可显示在活动栏。"
+Write-Host "3. 手动启动：node ""$extTarget\app\server.mjs"" --workspace ""$env:USERPROFILE\StudyMate"" --open"

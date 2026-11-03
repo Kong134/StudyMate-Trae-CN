@@ -7,7 +7,7 @@
   "license": "MIT",
   "engines": { "vscode": "^1.70.0" },
   "categories": ["Other"],
-  "activationEvents": ["onView:studyMate.view"],
+  "activationEvents": ["onView:studyMate.view", "onCommand:studyMate.openPanel", "onStartupFinished"],
   "main": "./extension.js",
   "contributes": {
     "viewsContainers": {
@@ -30,8 +30,9 @@
       ]
     },
     "commands": [
-      { "command": "studyMate.openInBrowser", "title": "在学习搭档：在浏览器中打开" },
-      { "command": "studyMate.restartServer", "title": "在学习搭档：重启阅读端服务" }
+      { "command": "studyMate.openPanel", "title": "学习搭档：打开学习界面（标签页）" },
+      { "command": "studyMate.openInBrowser", "title": "学习搭档：在浏览器中打开" },
+      { "command": "studyMate.restartServer", "title": "学习搭档：重启阅读端服务" }
     ],
     "menus": {
       "view/title": [

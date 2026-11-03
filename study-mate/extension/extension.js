@@ -8,6 +8,7 @@ let serverProc = null;
 let serverUrl = null;
 let startPromise = null;
 let provider = null;
+let panel = null;
 let output = null;
 
 function log(line) {
@@ -214,7 +215,59 @@ class StudyMateView {
   }
 }
 
+function errorHtml(msg) {
+  return shellHtml(
+    `<div class="empty"><h3>启动失败</h3><p>${String(msg).replace(/</g, '&lt;')}</p>
+      <p>确认机器上有 Node 18+，然后重新执行命令或重启 Trae。</p></div>`,
+    "default-src 'none'; style-src 'unsafe-inline';"
+  );
+}
+
+/** 在编辑器区域打开一个标签页（活动栏不可用时的主入口） */
+async function openPanel(context) {
+  if (panel) {
+    panel.reveal(panel.viewColumn);
+    return;
+  }
+  panel = vscode.window.createWebviewPanel(
+    'studyMate.panel',
+    '学习搭档',
+    vscode.ViewColumn.One,
+    { enableScripts: false, retainContextWhenHidden: true }
+  );
+  panel.onDidDispose(() => { panel = null; });
+
+  const workspace = resolveWorkspace();
+  if (!fs.existsSync(path.join(workspace, 'workspace.json'))) {
+    panel.webview.html = emptyHtml(workspace);
+    return;
+  }
+  if (serverUrl) {
+    panel.webview.html = iframeHtml(serverUrl);
+    return;
+  }
+  panel.webview.html = loadingHtml('正在启动学习阅读端…');
+  try {
+    const url = await startServer(context, workspace);
+    if (panel) panel.webview.html = iframeHtml(url);
+  } catch (err) {
+    log(err.message);
+    if (panel) panel.webview.html = errorHtml(err.message);
+  }
+}
+
+/** 启动痕迹：用来确认 Trae CN 到底有没有加载这个扩展 */
+function markLoaded(context) {
+  try {
+    const file = path.join(os.homedir(), '.trae-cn', 'study-mate-load.log');
+    const ver = context.extension && context.extension.packageJSON ? context.extension.packageJSON.version : '?';
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, `${new Date().toISOString()} activated v${ver}\n`, 'utf8');
+  } catch (e) { /* 写不进去就算了 */ }
+}
+
 function activate(context) {
+  markLoaded(context);
   provider = new StudyMateView(context);
 
   context.subscriptions.push(
@@ -224,6 +277,7 @@ function activate(context) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('studyMate.openPanel', () => openPanel(context)),
     vscode.commands.registerCommand('studyMate.openInBrowser', async () => {
       try {
         const workspace = resolveWorkspace();
@@ -240,6 +294,14 @@ function activate(context) {
     vscode.workspace.onDidChangeWorkspaceFolders(() => provider.refresh()),
     { dispose: stopServer }
   );
+
+  // 状态栏入口：活动栏不可用时，这里也能一键打开
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  status.text = '$(book) 学习搭档';
+  status.tooltip = '打开学习界面';
+  status.command = 'studyMate.openPanel';
+  status.show();
+  context.subscriptions.push(status);
 }
 
 function deactivate() {
