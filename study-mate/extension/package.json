@@ -1,0 +1,43 @@
+{
+  "name": "study-mate-view",
+  "displayName": "学习搭档",
+  "description": "把 Study Mate 学习工作区挂到 Trae 左侧工具栏：科目、路线图、课件、笔记一站打开。",
+  "version": "0.1.0",
+  "publisher": "studymate",
+  "license": "MIT",
+  "engines": { "vscode": "^1.70.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onView:studyMate.view"],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "studyMate",
+          "title": "学习搭档",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "studyMate": [
+        {
+          "type": "webview",
+          "id": "studyMate.view",
+          "name": "学习",
+          "contextualTitle": "学习搭档"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "studyMate.openInBrowser", "title": "在学习搭档：在浏览器中打开" },
+      { "command": "studyMate.restartServer", "title": "在学习搭档：重启阅读端服务" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "studyMate.openInBrowser", "when": "view == studyMate.view", "group": "navigation" },
+        { "command": "studyMate.restartServer", "when": "view == studyMate.view", "group": "navigation" }
+      ]
+    }
+  }
+}

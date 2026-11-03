@@ -1,0 +1,40 @@
+{
+  "name": "study-mate",
+  "version": "0.1.0",
+  "displayName": "学习搭档",
+  "displayNameEn": "Study Mate",
+  "description": "把任意科目学透的学习工作流：入学评估、大纲路线图、课件讲解、练习评估、跨科目记忆，自带本地课件阅读端。",
+  "author": {
+    "name": "Study Mate for Trae"
+  },
+  "license": "MIT",
+  "keywords": [
+    "学习",
+    "课程",
+    "大纲",
+    "课件",
+    "练习",
+    "记忆",
+    "自学"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "学习搭档",
+    "shortDescription": "定大纲、讲课件、出练习、记进度，任意科目一站式自学。",
+    "longDescription": "Study Mate 把学习拆成可执行的步骤：先做入学评估，再产出一份按前置依赖分层的知识点路线图，然后一个知识点一个知识点地写课件、出练习、做项目、记评估。所有数据存在本地工作区，跨科目共享学习记忆，并自带一个离线可用的课件阅读端。",
+    "developerName": "Study Mate for Trae",
+    "category": "学习效率",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "我想学一门科目，帮我从零开始安排课程。"
+    ],
+    "brandColor": "#1F6F5C",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/icon.svg",
+    "screenshots": []
+  }
+}

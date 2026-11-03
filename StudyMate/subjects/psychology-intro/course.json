@@ -1,0 +1,139 @@
+{
+  "id": "psychology-intro",
+  "title": "心理学导论",
+  "subtitle": "从零建立学科地图：先学会怎么问问题，再学怎么回答",
+  "goal": "能区分常识与实证结论，能读懂入门文献的方法部分，能设计一个简单实验",
+  "level": "零基础",
+  "hoursPerWeek": 5,
+  "status": "active",
+  "createdAt": "2026-11-03",
+  "nodes": [
+    {
+      "id": "p1",
+      "title": "心理学研究什么",
+      "type": "concept",
+      "layer": 1,
+      "status": "done",
+      "estimated": 40,
+      "summary": "能用自己的话说明心理学的研究对象，并指出三条常见误解",
+      "prereq": [],
+      "lesson": "01-what-is-psychology.md"
+    },
+    {
+      "id": "p2",
+      "title": "心理学怎么研究：科学方法",
+      "type": "concept",
+      "layer": 1,
+      "status": "in_progress",
+      "estimated": 45,
+      "summary": "能把一个模糊问题改写成可检验的假设，并说出自变量与因变量",
+      "prereq": [
+        "p1"
+      ],
+      "lesson": "02-scientific-method.md"
+    },
+    {
+      "id": "p3",
+      "title": "感觉与知觉",
+      "type": "concept",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 45,
+      "summary": "能区分感觉与知觉，解释为什么\"看见\"不等于\"看清\"",
+      "prereq": [
+        "p2"
+      ]
+    },
+    {
+      "id": "p4",
+      "title": "记忆与学习",
+      "type": "concept",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 50,
+      "summary": "能解释遗忘曲线，并用提取练习改进自己的复习",
+      "prereq": [
+        "p2"
+      ]
+    },
+    {
+      "id": "p5",
+      "title": "动机与情绪",
+      "type": "concept",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 45,
+      "summary": "能用期望-价值框架解释一个真实的坚持或放弃行为",
+      "prereq": [
+        "p2"
+      ]
+    },
+    {
+      "id": "p6",
+      "title": "描述统计：把一群人变成几个数",
+      "type": "lab",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 60,
+      "summary": "能手算均值、标准差，并说明它们各丢失了什么信息",
+      "prereq": [
+        "p3",
+        "p4"
+      ]
+    },
+    {
+      "id": "p7",
+      "title": "相关与因果",
+      "type": "concept",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 40,
+      "summary": "能识别第三变量与反向因果，判断一条新闻结论是否站得住",
+      "prereq": [
+        "p6"
+      ]
+    },
+    {
+      "id": "p8",
+      "title": "项目：做一个迷你实验",
+      "type": "project",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 120,
+      "summary": "独立完成一次小规模实验：假设、操作化、收集数据、写两页报告",
+      "prereq": [
+        "p7"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "p1",
+      "to": "p2"
+    },
+    {
+      "from": "p2",
+      "to": "p3"
+    },
+    {
+      "from": "p2",
+      "to": "p4"
+    },
+    {
+      "from": "p2",
+      "to": "p5"
+    },
+    {
+      "from": "p4",
+      "to": "p6"
+    },
+    {
+      "from": "p6",
+      "to": "p7"
+    },
+    {
+      "from": "p7",
+      "to": "p8"
+    }
+  ]
+}
