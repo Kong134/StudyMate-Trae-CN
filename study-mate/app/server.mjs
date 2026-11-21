@@ -29,6 +29,7 @@ function resolveWorkspace() {
 const WORKSPACE = resolveWorkspace();
 const SUBJECTS_DIR = path.join(WORKSPACE, 'subjects');
 const MEMORY_DIR = path.join(WORKSPACE, 'memory');
+const STATE_FILE = path.join(WORKSPACE, 'state.json');
 
 /* ---------- 工具 ---------- */
 const MIME = {
@@ -66,6 +67,17 @@ function safeJoin(base, ...parts) {
   const root = path.resolve(base);
   if (!target.startsWith(root + path.sep) && target !== root) return null;
   return target;
+}
+
+/** 路径片段只允许普通名字，不允许 .. 与分隔符 */
+function validSegment(value) {
+  return typeof value === 'string' && value.length > 0 && !value.includes('..') && !/[\\/]/.test(value);
+}
+
+/** 主观题草稿文件：subjects/<subject>/answers/<node>.json */
+function answersFile(subject, node) {
+  if (!validSegment(subject) || !validSegment(node)) return null;
+  return safeJoin(SUBJECTS_DIR, subject, 'answers', `${node}.json`);
 }
 
 function sendJson(res, code, data) {
@@ -164,6 +176,56 @@ async function listSubjects() {
   return out;
 }
 
+/* ---------- 笔记汇总 ---------- */
+async function listNotes() {
+  const out = [];
+  let dirs = [];
+  try {
+    dirs = await fsp.readdir(SUBJECTS_DIR, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    const course = await loadCourse(d.name);
+    const nodes = course && Array.isArray(course.nodes) ? course.nodes : [];
+    const notesDir = safeJoin(SUBJECTS_DIR, d.name, 'notes');
+    if (!notesDir) continue;
+    let files = [];
+    try {
+      files = await fsp.readdir(notesDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      if (!f.isFile() || !/\.md$/i.test(f.name)) continue;
+      const node = f.name.replace(/\.md$/i, '');
+      const file = safeJoin(notesDir, f.name);
+      if (!file) continue;
+      let body = '';
+      let stat = null;
+      try {
+        body = (await fsp.readFile(file, 'utf8')).replace(/^\uFEFF/, '');
+        stat = await fsp.stat(file);
+      } catch {
+        continue;
+      }
+      const hit = nodes.find((n) => n.id === node);
+      out.push({
+        subject: d.name,
+        subjectTitle: (course && course.title) || d.name,
+        node,
+        nodeTitle: hit ? hit.title : node,
+        body,
+        chars: body.length,
+        updatedAt: stat.mtime.toISOString()
+      });
+    }
+  }
+  out.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+  return out;
+}
+
 /* ---------- 路由 ---------- */
 async function handleApi(req, res, url) {
   const p = url.pathname;
@@ -238,6 +300,57 @@ async function handleApi(req, res, url) {
       }
     };
     return sendJson(res, 200, { profile: await read('profile.md'), preferences: await read('preferences.md') });
+  }
+
+  if (p === '/api/notes' && req.method === 'GET') {
+    return sendJson(res, 200, { notes: await listNotes() });
+  }
+
+  if (p === '/api/answers' && req.method === 'GET') {
+    const subject = url.searchParams.get('subject');
+    const node = url.searchParams.get('node');
+    const file = answersFile(subject, node);
+    if (!file) return sendJson(res, 400, { error: '路径不合法' });
+    const data = await readJson(file, {});
+    return sendJson(res, 200, { answers: data && typeof data === 'object' ? data : {} });
+  }
+
+  if (p === '/api/answers' && req.method === 'POST') {
+    const { subject, node, qid, text, self } = await readBody(req);
+    const file = answersFile(subject, node);
+    if (!file) return sendJson(res, 400, { error: '路径不合法' });
+    if (!/^q\d+$/.test(String(qid || ''))) return sendJson(res, 400, { error: '题号不合法' });
+    const cleanSelf = self == null ? null : self;
+    if (cleanSelf !== null && !['right', 'partial', 'wrong'].includes(cleanSelf)) {
+      return sendJson(res, 400, { error: '自评不合法' });
+    }
+    const cleanText = typeof text === 'string' ? text : '';
+    if (cleanText.length > 20000) return sendJson(res, 400, { error: '答案超过 20000 字上限' });
+    const data = await readJson(file, {});
+    const now = new Date().toISOString();
+    data[qid] = { text: cleanText, self: cleanSelf, updatedAt: now };
+    await writeJson(file, data);
+    return sendJson(res, 200, { ok: true, updatedAt: now });
+  }
+
+  if (p === '/api/state' && req.method === 'GET') {
+    const data = await readJson(STATE_FILE, {});
+    return sendJson(res, 200, data && typeof data === 'object' ? data : {});
+  }
+
+  if (p === '/api/state' && req.method === 'POST') {
+    const { subject, node, scroll, tab } = await readBody(req);
+    if (!validSegment(subject) || !validSegment(node)) return sendJson(res, 400, { error: '路径不合法' });
+    const data = await readJson(STATE_FILE, {});
+    data.lastRead = {
+      subject,
+      node,
+      scroll: Math.max(0, Math.round(Number(scroll) || 0)),
+      tab: tab === 'note' ? 'note' : 'q',
+      ts: new Date().toISOString()
+    };
+    await writeJson(STATE_FILE, data);
+    return sendJson(res, 200, { ok: true, lastRead: data.lastRead });
   }
 
   return sendJson(res, 404, { error: '接口不存在' });

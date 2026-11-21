@@ -43,6 +43,34 @@
     return Promise.resolve();
   }
   function pad4(n) { var s = String(n); while (s.length < 4) s = '0' + s; return s; }
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+  function fmtTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  function hhmm(d) {
+    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  /** 笔记摘要：去掉 Markdown 标记，只留纯文本 */
+  function plainSummary(md) {
+    return String(md || '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/^[ \t]*([-*+]\s+|>\s*|#{1,6}\s+)/gm, '')
+      .replace(/^[ \t]*(-{3,}|={3,})[ \t]*$/gm, ' ')
+      .replace(/[*_`~]/g, '')
+      .replace(/:::+[^\n]*/g, ' ')
+      .replace(/@@MATH\d+@@/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
   /* ---------- Markdown ---------- */
   var MATH_RE = /(\$\$[\s\S]*?\$\$|\$[^\n$]+\$)/g;
@@ -211,19 +239,51 @@
       return;
     }
 
-    var last = (ws.subjects || []).filter(function (s) { return s.current && s.status === 'active'; })[0] || ws.subjects[0];
+    var saved = {};
+    try { saved = await api('/api/state'); } catch (e) { saved = {}; }
+    var lr = saved && saved.lastRead;
+    var last = null;
+    var node = null;
+    var nodeIdx = 0;
+    var hasLesson = false;
+
+    if (lr && lr.subject && lr.node) {
+      var subj = (ws.subjects || []).filter(function (s) { return s.id === lr.subject; })[0];
+      if (subj) {
+        try {
+          var lc = await api('/api/course/' + encodeURIComponent(lr.subject));
+          var lns = lc.nodes || [];
+          for (var li = 0; li < lns.length; li++) {
+            if (lns[li].id === lr.node) {
+              last = subj;
+              node = lns[li];
+              nodeIdx = li;
+              hasLesson = Boolean(lns[li].lesson);
+              break;
+            }
+          }
+        } catch (e) { last = null; node = null; }
+      }
+    }
+    if (!last) {
+      last = (ws.subjects || []).filter(function (s) { return s.current && s.status === 'active'; })[0] || ws.subjects[0];
+      node = last && last.current ? { id: last.current.id, title: last.current.title } : null;
+      nodeIdx = last ? last.doneCount : 0;
+      hasLesson = Boolean(last && last.hasLesson);
+    }
+
     var html = '<h1 class="page-title">学习工作台</h1>' +
       '<p class="lede">没有待复习队列，也没有今天该刷多少题的排期——接着上次那个节点往下读就行。</p>';
 
-    if (last && last.current) {
+    if (last && node) {
       html += '<div class="sec-head"><h2>接着上次</h2></div>';
       html += '<a class="last-card" href="#/s/' + encodeURIComponent(last.id) + '">';
       html += '<div class="last-top"><span class="subject-label">' + esc(last.title) + '</span>' +
         '<span class="chip learning">' + (last.progress ? '学习中' : '未开始') + '</span></div>';
-      html += '<h3><span class="idx">' + pad4(last.doneCount + 1) + '</span>' + esc(last.current.title) + '</h3>';
+      html += '<h3><span class="idx">' + pad4(nodeIdx + 1) + '</span>' + esc(node.title) + '</h3>';
       html += '<p>' + esc(last.subtitle || last.goal || '按前置依赖排好的路线，学完一个节点勾一个。') + '</p>';
       html += '<div class="last-foot"><span>已学完 ' + last.doneCount + ' / ' + last.nodeCount + '</span>' +
-        '<button class="text-btn" data-last="' + esc(last.id) + '">继续读 →</button></div></a>';
+        '<button class="text-btn" data-last="' + esc(last.id) + '" data-node="' + esc(node.id) + '">继续读 →</button></div></a>';
     }
 
     html += '<div class="sec-head" style="margin-top:34px"><h2>科目</h2><span class="count">' +
@@ -250,10 +310,11 @@
       lastBtn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        if (last.current && last.hasLesson) {
-          location.hash = '#/l/' + encodeURIComponent(last.id) + '/' + encodeURIComponent(last.current.id);
+        var nid = lastBtn.dataset.node;
+        if (nid && hasLesson) {
+          location.hash = '#/l/' + encodeURIComponent(lastBtn.dataset.last) + '/' + encodeURIComponent(nid);
         } else {
-          location.hash = '#/s/' + encodeURIComponent(last.id);
+          location.hash = '#/s/' + encodeURIComponent(lastBtn.dataset.last);
         }
       });
     }
@@ -312,9 +373,11 @@
   }
 
   /* ---------- 课件页 ---------- */
-  async function renderLesson(subjectId, nodeId) {
+  async function renderLesson(subjectId, nodeId, tab) {
     var course = await api('/api/course/' + encodeURIComponent(subjectId));
     var lesson = await api('/api/lesson?subject=' + encodeURIComponent(subjectId) + '&node=' + encodeURIComponent(nodeId));
+    var saved = {};
+    try { saved = await api('/api/state'); } catch (e) { saved = {}; }
     state.course = course;
     state.subjectId = subjectId;
     state.lessonNode = nodeId;
@@ -356,8 +419,31 @@
     var prose = document.getElementById('prose');
     if (prose) typeset(prose);
 
-    renderPanel(subjectId, nodeId, course, node, split.exercises, lesson.note || '');
+    renderPanel(subjectId, nodeId, course, node, split.exercises, lesson.note || '', tab === 'note' ? 'note' : 'q');
     renderTree();
+
+    /* 阅读状态：滚动停止 500ms 存一次，再次进入同一节点时回到原位 */
+    var contentEl = document.getElementById('content');
+    if (state.scrollHandler) contentEl.removeEventListener('scroll', state.scrollHandler);
+    var scrollTimer;
+    state.scrollHandler = function () {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(function () {
+        saveReading(subjectId, nodeId, state.panelTab || 'q');
+      }, 500);
+    };
+    contentEl.addEventListener('scroll', state.scrollHandler);
+
+    var lr = saved && saved.lastRead;
+    if (lr && lr.subject === subjectId && lr.node === nodeId && Number(lr.scroll) > 0) {
+      var age = Date.now() - new Date(lr.ts).getTime();
+      if (age >= 0 && age < 7 * 24 * 3600 * 1000) {
+        setTimeout(function () {
+          contentEl.scrollTop = Number(lr.scroll) || 0;
+          toast('已回到上次位置');
+        }, 0);
+      }
+    }
 
     var cp = document.getElementById('copyPrompt');
     if (cp) cp.addEventListener('click', function () {
@@ -367,14 +453,29 @@
   }
 
   /* ---------- 右侧栏 ---------- */
-  function renderPanel(subjectId, nodeId, course, node, exercises, note) {
+  function renderPanel(subjectId, nodeId, course, node, exercises, note, initialTab) {
     sidePanel.hidden = false;
+    var answers = {};
+    var answerReady = api('/api/answers?subject=' + encodeURIComponent(subjectId) + '&node=' + encodeURIComponent(nodeId))
+      .then(function (r) { answers = (r && r.answers) || {}; })
+      .catch(function () {});
+
     var qHtml = '';
     if (exercises.length) {
       exercises.forEach(function (ex, i) {
-        qHtml += '<div class="q-card"><div class="q-head"><span class="q-no">' + (i + 1) + '</span>' +
+        var qid = 'q' + (i + 1);
+        qHtml += '<div class="q-card" data-qid="' + qid + '"><div class="q-head"><span class="q-no">' + (i + 1) + '</span>' +
           '<span class="q-title">' + esc(ex.title) + '</span></div>' +
-          '<div class="q-body">' + renderMarkdown(ex.md) + '</div></div>';
+          '<div class="q-body">' + renderMarkdown(ex.md) + '</div>' +
+          '<textarea class="ans-input" rows="3" placeholder="先自己写答案，再对照参考答案"></textarea>' +
+          '<div class="ans-bar">' +
+          '<button class="ans-toggle" type="button">参考答案</button>' +
+          '<span class="ans-self">' +
+          '<button type="button" data-self="right">对</button>' +
+          '<button type="button" data-self="partial">部分</button>' +
+          '<button type="button" data-self="wrong">错</button>' +
+          '</span>' +
+          '<span class="ans-status">未保存</span></div></div>';
       });
     } else {
       qHtml = '<div class="panel-empty">这一课没有抽出来的练习。课件里的 `::: exercise` 块会自动出现在这里。</div>';
@@ -390,12 +491,78 @@
       '<div class="panel-tabs">' +
       '<button class="panel-tab active" data-tab="q">题目 ' + (exercises.length ? exercises.length : '') + '</button>' +
       '<button class="panel-tab" data-tab="note">笔记</button></div>' +
-      '<div class="panel-body" id="panelBody">' + qHtml + '</div>' +
+      '<div class="panel-body" id="panelBody"></div>' +
       '<div class="panel-actions">' + actions + '</div>';
 
     var panelBody = document.getElementById('panelBody');
 
-    function showTab(name) {
+    function mountQuestions() {
+      panelBody.innerHTML = qHtml;
+      if (!exercises.length) return;
+      Array.prototype.forEach.call(panelBody.querySelectorAll('.q-card'), function (card) {
+        var qid = card.dataset.qid;
+        var ansBox = card.querySelector('.q-body details.answer');
+        if (ansBox) card.appendChild(ansBox); /* 参考答案放到作答框下方，默认收起 */
+        var input = card.querySelector('.ans-input');
+        var statusEl = card.querySelector('.ans-status');
+        var self = null;
+        var timer;
+
+        function setSaveText(text, ok) {
+          statusEl.textContent = text;
+          statusEl.classList.toggle('saved', !!ok);
+        }
+        function paintSelf() {
+          Array.prototype.forEach.call(card.querySelectorAll('.ans-self button'), function (b) {
+            b.classList.toggle('on', b.dataset.self === self);
+          });
+        }
+        function save() {
+          clearTimeout(timer);
+          setSaveText('保存中…', false);
+          api('/api/answers', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject: subjectId, node: nodeId, qid: qid, text: input.value, self: self })
+          }).then(function (r) {
+            var at = r.updatedAt || new Date().toISOString();
+            answers[qid] = { text: input.value, self: self, updatedAt: at };
+            setSaveText('已保存 ' + hhmm(new Date(at)), true);
+          }).catch(function () { setSaveText('保存失败', false); });
+        }
+
+        input.addEventListener('input', function () {
+          setSaveText('未保存', false);
+          clearTimeout(timer);
+          timer = setTimeout(save, 700);
+        });
+
+        Array.prototype.forEach.call(card.querySelectorAll('.ans-self button'), function (b) {
+          b.addEventListener('click', function () {
+            self = b.dataset.self;
+            paintSelf();
+            save();
+          });
+        });
+
+        var toggle = card.querySelector('.ans-toggle');
+        if (toggle) {
+          toggle.addEventListener('click', function () {
+            if (ansBox) ansBox.open = !ansBox.open;
+          });
+        }
+
+        answerReady.then(function () {
+          var a = answers[qid];
+          if (!a) return;
+          if (!input.value) input.value = a.text || '';
+          if (a.self) { self = a.self; paintSelf(); }
+          if (a.updatedAt) setSaveText('已保存 ' + hhmm(new Date(a.updatedAt)), true);
+        });
+      });
+    }
+
+    function showTab(name, silent) {
+      if (name !== 'note') name = 'q';
       Array.prototype.forEach.call(sidePanel.querySelectorAll('.panel-tab'), function (t) {
         t.classList.toggle('active', t.dataset.tab === name);
       });
@@ -404,8 +571,8 @@
           esc(note) + '</textarea>' +
           '<div class="note-actions"><span>保存到 notes/' + esc(nodeId) + '.md</span>' +
           '<button class="btn ghost" id="saveNote">保存笔记</button></div>';
-        var save = document.getElementById('saveNote');
-        save.addEventListener('click', function () {
+        var saveNote = document.getElementById('saveNote');
+        saveNote.addEventListener('click', function () {
           var val = document.getElementById('noteInput').value;
           api('/api/note', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -414,15 +581,17 @@
             .catch(function (e) { toast(e.message); });
         });
       } else {
-        panelBody.innerHTML = qHtml;
+        mountQuestions();
       }
       typeset(panelBody);
+      state.panelTab = name;
+      if (!silent) saveReading(subjectId, nodeId, name);
     }
 
     Array.prototype.forEach.call(sidePanel.querySelectorAll('.panel-tab'), function (t) {
       t.addEventListener('click', function () { showTab(t.dataset.tab); });
     });
-    typeset(panelBody);
+    showTab(initialTab === 'note' ? 'note' : 'q', true);
 
     function bind(id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); }
     bind('markStart', function () { return setStatus(subjectId, nodeId, 'in_progress', '已开始学习'); });
@@ -432,6 +601,15 @@
       copyText('我在「' + course.title + ' / ' + node.title + '」这一课有个地方没懂：')
         .then(function () { toast('已复制，补上具体段落发给搭档'); });
     });
+  }
+
+  function saveReading(subjectId, nodeId, tab) {
+    var contentEl = document.getElementById('content');
+    var scroll = contentEl ? contentEl.scrollTop : (window.scrollY || 0);
+    api('/api/state', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: subjectId, node: nodeId, scroll: Math.round(scroll), tab: tab })
+    }).catch(function () {});
   }
 
   async function setStatus(subjectId, nodeId, status, msg) {
@@ -466,20 +644,116 @@
     renderTree();
   }
 
+  /* ---------- 笔记页 ---------- */
+  async function renderNotes() {
+    state.course = null;
+    state.subjectId = null;
+    sidePanel.hidden = true;
+    setCrumb([{ label: '主页', href: '#/' }, { label: '笔记' }]);
+    setActiveActivity('#/notes');
+    document.getElementById('topHint').textContent = '';
+
+    var data = await api('/api/notes');
+    var notes = data.notes || [];
+    var subjectIds = {};
+    notes.forEach(function (n) { subjectIds[n.subject] = true; });
+    var subjectCount = Object.keys(subjectIds).length;
+
+    var html = '<h1 class="page-title">笔记</h1>' +
+      '<p class="notes-stat">' + notes.length + ' 条笔记 · 覆盖 ' + subjectCount + ' 门科目</p>';
+
+    if (!notes.length) {
+      html += '<div class="missing"><strong>还没有笔记。</strong>在课件页右侧的『笔记』里写第一句。</div>';
+      stageInner.innerHTML = html;
+      renderTree();
+      return;
+    }
+
+    html += '<input class="notes-search" id="notesSearch" type="search" placeholder="搜索笔记内容或节点名" />' +
+      '<div id="notesList"></div>';
+    stageInner.innerHTML = html;
+
+    var listEl = document.getElementById('notesList');
+
+    function paint(keyword) {
+      var kw = (keyword || '').trim().toLowerCase();
+      var filtered = notes.filter(function (n) {
+        if (!kw) return true;
+        return (n.nodeTitle + '\n' + n.subjectTitle + '\n' + n.body).toLowerCase().indexOf(kw) >= 0;
+      });
+      if (!filtered.length) {
+        listEl.innerHTML = '<p class="notes-empty">没有匹配的笔记。</p>';
+        return;
+      }
+      var groups = [];
+      var byId = {};
+      filtered.forEach(function (n) {
+        if (!byId[n.subject]) {
+          byId[n.subject] = { title: n.subjectTitle, items: [] };
+          groups.push(byId[n.subject]);
+        }
+        byId[n.subject].items.push(n);
+      });
+      var out = '';
+      groups.forEach(function (g) {
+        out += '<div class="note-group"><div class="note-group-head"><span>' + esc(g.title) +
+          '</span><small>' + g.items.length + ' 条</small></div>';
+        g.items.forEach(function (n) {
+          out += '<button class="note-card" data-subject="' + esc(n.subject) + '" data-node="' + esc(n.node) + '">' +
+            '<h3>' + esc(n.nodeTitle) + '</h3>' +
+            '<p class="note-excerpt">' + esc(plainSummary(n.body).slice(0, 80)) + '</p>' +
+            '<span class="note-time">' + esc(fmtTime(n.updatedAt)) + '</span></button>';
+        });
+        out += '</div>';
+      });
+      listEl.innerHTML = out;
+      Array.prototype.forEach.call(listEl.querySelectorAll('.note-card'), function (b) {
+        b.addEventListener('click', function () {
+          location.hash = '#/l/' + encodeURIComponent(b.dataset.subject) + '/' + encodeURIComponent(b.dataset.node) + '?tab=note';
+        });
+      });
+    }
+
+    paint('');
+    document.getElementById('notesSearch').addEventListener('input', function () { paint(this.value); });
+    renderTree();
+  }
+
   /* ---------- 路由 ---------- */
   async function route() {
-    var hash = location.hash.replace(/^#\/?/, '');
-    var parts = hash.split('/').filter(Boolean);
+    var raw = location.hash.replace(/^#\/?/, '');
+    var query = {};
+    var qIndex = raw.indexOf('?');
+    if (qIndex >= 0) {
+      raw.slice(qIndex + 1).split('&').forEach(function (pair) {
+        if (!pair) return;
+        var eq = pair.indexOf('=');
+        var k = eq >= 0 ? pair.slice(0, eq) : pair;
+        var v = eq >= 0 ? pair.slice(eq + 1) : '';
+        try { query[decodeURIComponent(k)] = decodeURIComponent(v); } catch (e) { /* 忽略坏参数 */ }
+      });
+      raw = raw.slice(0, qIndex);
+    }
+    var parts = raw.split('/').filter(Boolean);
+    var contentEl = document.getElementById('content');
+    if (state.scrollHandler) {
+      contentEl.removeEventListener('scroll', state.scrollHandler);
+      state.scrollHandler = null;
+    }
+    contentEl.scrollTop = 0;
     state.route = 'home';
     try {
-      if (parts[0] === 'memory') {
+      if (parts[0] === 'notes') {
+        state.route = 'notes';
+        await renderNotes();
+      } else if (parts[0] === 'memory') {
         await renderMemory();
       } else if (parts[0] === 's' && parts[1]) {
         state.route = 'subject';
         await renderSubject(decodeURIComponent(parts[1]));
       } else if (parts[0] === 'l' && parts[1] && parts[2]) {
         state.route = 'lesson';
-        await renderLesson(decodeURIComponent(parts[1]), decodeURIComponent(parts[2]));
+        await renderLesson(decodeURIComponent(parts[1]), decodeURIComponent(parts[2]), query.tab);
       } else if ((state.workspace.subjects || []).length) {
         state.route = 'home';
         await renderHome();
@@ -492,7 +766,6 @@
       stageInner.innerHTML = '<h1 class="page-title">读取失败</h1><div class="missing"><strong>' + esc(e.message) +
         '</strong>确认工作区里的 course.json 是合法 JSON，然后点右上角「刷新」。</div>';
     }
-    document.getElementById('content').scrollTop = 0;
   }
 
   async function loadWorkspace() {

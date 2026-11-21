@@ -2,7 +2,7 @@
   "name": "study-mate-view",
   "displayName": "学习搭档",
   "description": "把 Study Mate 学习工作区挂到 Trae 左侧工具栏：科目、路线图、课件、笔记一站打开。",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "studymate",
   "license": "MIT",
   "engines": { "vscode": "^1.70.0" },
