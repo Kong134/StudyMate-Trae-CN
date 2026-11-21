@@ -245,7 +245,6 @@
     var last = null;
     var node = null;
     var nodeIdx = 0;
-    var hasLesson = false;
 
     if (lr && lr.subject && lr.node) {
       var subj = (ws.subjects || []).filter(function (s) { return s.id === lr.subject; })[0];
@@ -258,7 +257,6 @@
               last = subj;
               node = lns[li];
               nodeIdx = li;
-              hasLesson = Boolean(lns[li].lesson);
               break;
             }
           }
@@ -269,7 +267,6 @@
       last = (ws.subjects || []).filter(function (s) { return s.current && s.status === 'active'; })[0] || ws.subjects[0];
       node = last && last.current ? { id: last.current.id, title: last.current.title } : null;
       nodeIdx = last ? last.doneCount : 0;
-      hasLesson = Boolean(last && last.hasLesson);
     }
 
     var html = '<h1 class="page-title">学习工作台</h1>' +
@@ -311,7 +308,7 @@
         e.preventDefault();
         e.stopPropagation();
         var nid = lastBtn.dataset.node;
-        if (nid && hasLesson) {
+        if (nid) {
           location.hash = '#/l/' + encodeURIComponent(lastBtn.dataset.last) + '/' + encodeURIComponent(nid);
         } else {
           location.hash = '#/s/' + encodeURIComponent(lastBtn.dataset.last);
@@ -419,7 +416,12 @@
     var prose = document.getElementById('prose');
     if (prose) typeset(prose);
 
-    renderPanel(subjectId, nodeId, course, node, split.exercises, lesson.note || '', tab === 'note' ? 'note' : 'q');
+    var lr = saved && saved.lastRead;
+    var sameRead = lr && lr.subject === subjectId && lr.node === nodeId;
+    var initialTab;
+    if (tab) initialTab = tab === 'note' ? 'note' : 'q';
+    else initialTab = sameRead && lr.tab === 'note' ? 'note' : 'q';
+    renderPanel(subjectId, nodeId, course, node, split.exercises, lesson.note || '', initialTab);
     renderTree();
 
     /* 阅读状态：滚动停止 500ms 存一次，再次进入同一节点时回到原位 */
@@ -434,7 +436,6 @@
     };
     contentEl.addEventListener('scroll', state.scrollHandler);
 
-    var lr = saved && saved.lastRead;
     if (lr && lr.subject === subjectId && lr.node === nodeId && Number(lr.scroll) > 0) {
       var age = Date.now() - new Date(lr.ts).getTime();
       if (age >= 0 && age < 7 * 24 * 3600 * 1000) {
@@ -513,6 +514,7 @@
           statusEl.classList.toggle('saved', !!ok);
         }
         function paintSelf() {
+          card.dataset.self = self || '';
           Array.prototype.forEach.call(card.querySelectorAll('.ans-self button'), function (b) {
             b.classList.toggle('on', b.dataset.self === self);
           });
@@ -563,22 +565,48 @@
 
     function showTab(name, silent) {
       if (name !== 'note') name = 'q';
+      /* 离开笔记 tab 前先把未落盘的内容存下来，避免切换丢失 */
+      var pendingNote = document.getElementById('noteInput');
+      if (pendingNote && name !== 'note') {
+        note = pendingNote.value;
+        api('/api/note', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject: subjectId, node: nodeId, content: note })
+        }).catch(function () {});
+      }
       Array.prototype.forEach.call(sidePanel.querySelectorAll('.panel-tab'), function (t) {
         t.classList.toggle('active', t.dataset.tab === name);
       });
       if (name === 'note') {
         panelBody.innerHTML = '<textarea class="note-area" id="noteInput" placeholder="用自己的话写一遍：这一课解决什么问题？哪里还想追问？">' +
           esc(note) + '</textarea>' +
-          '<div class="note-actions"><span>保存到 notes/' + esc(nodeId) + '.md</span>' +
+          '<div class="note-actions"><span class="note-status" id="noteStatus">已保存</span>' +
           '<button class="btn ghost" id="saveNote">保存笔记</button></div>';
-        var saveNote = document.getElementById('saveNote');
-        saveNote.addEventListener('click', function () {
-          var val = document.getElementById('noteInput').value;
-          api('/api/note', {
+        var noteInput = document.getElementById('noteInput');
+        var noteStatus = document.getElementById('noteStatus');
+        var noteTimer;
+        function setNoteStatus(text) { noteStatus.textContent = text; }
+        function persistNote() {
+          var val = noteInput.value;
+          setNoteStatus('保存中…');
+          return api('/api/note', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ subject: subjectId, node: nodeId, content: val })
-          }).then(function () { note = val; toast('笔记已保存'); })
-            .catch(function (e) { toast(e.message); });
+          }).then(function () {
+            note = val;
+            setNoteStatus('已保存 ' + hhmm(new Date()));
+          }).catch(function () {
+            setNoteStatus('保存失败');
+          });
+        }
+        noteInput.addEventListener('input', function () {
+          setNoteStatus('未保存');
+          clearTimeout(noteTimer);
+          noteTimer = setTimeout(persistNote, 900);
+        });
+        document.getElementById('saveNote').addEventListener('click', function () {
+          clearTimeout(noteTimer);
+          persistNote().then(function () { toast('笔记已保存'); });
         });
       } else {
         mountQuestions();
@@ -591,6 +619,27 @@
     Array.prototype.forEach.call(sidePanel.querySelectorAll('.panel-tab'), function (t) {
       t.addEventListener('click', function () { showTab(t.dataset.tab); });
     });
+
+    /* 离开本课前把未落盘的笔记与作答写回，避免丢最后几个字 */
+    state.flushPanel = function () {
+      var t = document.getElementById('noteInput');
+      if (t && t.value !== note) {
+        note = t.value;
+        api('/api/note', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject: subjectId, node: nodeId, content: note })
+        }).catch(function () {});
+      }
+      Array.prototype.forEach.call(sidePanel.querySelectorAll('.q-card'), function (card) {
+        var input = card.querySelector('.ans-input');
+        if (!input || !input.value) return;
+        api('/api/answers', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject: subjectId, node: nodeId, qid: card.dataset.qid, text: input.value, self: card.dataset.self || null })
+        }).catch(function () {});
+      });
+    };
+
     showTab(initialTab === 'note' ? 'note' : 'q', true);
 
     function bind(id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); }
@@ -739,6 +788,10 @@
     if (state.scrollHandler) {
       contentEl.removeEventListener('scroll', state.scrollHandler);
       state.scrollHandler = null;
+    }
+    if (state.flushPanel) {
+      try { state.flushPanel(); } catch (e) { /* 忽略落盘异常，不影响导航 */ }
+      state.flushPanel = null;
     }
     contentEl.scrollTop = 0;
     state.route = 'home';

@@ -15,7 +15,7 @@ if (-not (Test-Path $server)) {
 
 $alive = $false
 try {
-  $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/api/status" -TimeoutSec 3
+  $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/api/workspace" -TimeoutSec 3
   if ($r.StatusCode -eq 200) { $alive = $true }
 } catch { }
 

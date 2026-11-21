@@ -50,7 +50,7 @@ const MIME = {
 
 async function readJson(file, fallback) {
   try {
-    return JSON.parse(await fsp.readFile(file, 'utf8'));
+    return JSON.parse((await fsp.readFile(file, 'utf8')).replace(/^\uFEFF/, ''));
   } catch {
     return fallback;
   }
@@ -257,9 +257,11 @@ async function handleApi(req, res, url) {
 
     const file = safeJoin(SUBJECTS_DIR, subject, 'lessons', node.lesson);
     if (!file || !fs.existsSync(file)) return sendJson(res, 200, { node, missing: true, meta: {}, markdown: '', note: '' });
-    const parsed = parseLesson(await fsp.readFile(file, 'utf8'));
+    const parsed = parseLesson((await fsp.readFile(file, 'utf8')).replace(/^\uFEFF/, ''));
     const noteFile = safeJoin(SUBJECTS_DIR, subject, 'notes', `${nodeId}.md`);
-    const note = noteFile && fs.existsSync(noteFile) ? await fsp.readFile(noteFile, 'utf8') : '';
+    const note = noteFile && fs.existsSync(noteFile)
+      ? (await fsp.readFile(noteFile, 'utf8')).replace(/^\uFEFF/, '')
+      : '';
     return sendJson(res, 200, { node, meta: parsed.meta, markdown: parsed.markdown, note, missing: false });
   }
 
@@ -284,6 +286,7 @@ async function handleApi(req, res, url) {
 
   if (p === '/api/note' && req.method === 'POST') {
     const { subject, node, content } = await readBody(req);
+    if (!validSegment(subject) || !validSegment(node)) return sendJson(res, 400, { error: '路径不合法' });
     const file = safeJoin(SUBJECTS_DIR, subject, 'notes', `${node}.md`);
     if (!file) return sendJson(res, 400, { error: '路径不合法' });
     await fsp.mkdir(path.dirname(file), { recursive: true });
@@ -294,7 +297,7 @@ async function handleApi(req, res, url) {
   if (p === '/api/memory' && req.method === 'GET') {
     const read = async (f) => {
       try {
-        return await fsp.readFile(path.join(MEMORY_DIR, f), 'utf8');
+        return (await fsp.readFile(path.join(MEMORY_DIR, f), 'utf8')).replace(/^\uFEFF/, '');
       } catch {
         return '';
       }
@@ -360,9 +363,12 @@ async function serveStatic(req, res, url) {
   const rel = decodeURIComponent(url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, ''));
   const file = safeJoin(PUBLIC_DIR, rel);
   if (file && fs.existsSync(file) && fs.statSync(file).isFile()) {
+    const ext = path.extname(file).toLowerCase();
+    const isCode = ext === '.html' || ext === '.js' || ext === '.css';
     res.writeHead(200, {
-      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': path.extname(file) === '.html' ? 'no-store' : 'public, max-age=3600'
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      /* 前端代码不缓存，插件升级后刷新即生效 */
+      'Cache-Control': isCode ? 'no-store' : 'public, max-age=3600'
     });
     fs.createReadStream(file).pipe(res);
     return;
