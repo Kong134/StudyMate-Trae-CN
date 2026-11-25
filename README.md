@@ -61,8 +61,8 @@
 需要 **Node 18+**，不需要 `npm install`。
 
 ```powershell
-git clone https://github.com/<你的账号>/study-mate-trae.git
-cd study-mate-trae
+git clone https://github.com/Kong134/StudyMate-Trae-CN.git
+cd StudyMate-Trae-CN
 
 # 方式一：直接看示例科目「心理学导论」
 node "study-mate/app/server.mjs" --workspace "StudyMate" --open
@@ -71,6 +71,16 @@ node "study-mate/app/server.mjs" --workspace "StudyMate" --open
 终端会打印地址（默认 `http://127.0.0.1:4310/`）并自动打开浏览器。也可以双击 `start.ps1`。
 
 想看界面但还没装 Trae：上面这一条命令就够了，阅读端是独立网页。
+
+### 分享给别人
+
+- **推荐**：把仓库地址发过去 —— https://github.com/Kong134/StudyMate-Trae-CN 。对方装好 Node 18+，`git clone`（或点 `Code → Download ZIP` 解压），在解压目录双击 `install.ps1` 即可。
+- **不想用 git**：把整个项目文件夹压成 zip（排除 `.git`），对方解压后运行：
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\install.ps1
+  ```
+- 对方机器上会得到：桌面「学习搭档」图标、`%USERPROFILE%\StudyMate` 学习工作区、Trae 技能 `study-mate`（左侧栏图标在 Trae CN 里仍然不会出现，这是宿主限制）。
+- 学习数据全是 `StudyMate` 文件夹里的 Markdown / JSON，直接打包拷走就能迁移。
 
 ---
 
