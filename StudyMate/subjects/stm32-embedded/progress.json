@@ -28,5 +28,11 @@
     "subject": "stm32-embedded",
     "node": "s3",
     "status": "in_progress"
+  },
+  {
+    "at": "2026-11-26T09:00:00+08:00",
+    "subject": "stm32-embedded",
+    "node": "s2b",
+    "status": "in_progress"
   }
 ]

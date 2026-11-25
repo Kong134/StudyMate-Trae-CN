@@ -125,7 +125,21 @@ node "study-mate/app/server.mjs" --workspace "StudyMate" --open
 
 两边都不要改别的字段；`progress.json` 只追加，不重写历史。
 
-## 六、不要做的事
+## 六、交付后同步到 GitHub
+
+每次**实际写入或修改了文件**（课件、`course.json`、`memory/`、笔记）后，在结束回复前同步一次：
+
+```powershell
+node "$env:USERPROFILE\StudyMate-Trae-CN\tools\sync-github.mjs" --message "同步课件：<科目> <节点>"
+```
+
+- 脚本会：拉取远端 → 镜像工作区到仓库 `StudyMate/` → 重建 `docs/` → 提交 → 推送。
+- 纯答疑、没有改文件时不要跑。
+- 成功后回复里给出 commit 短哈希和链接；失败时保留本地提交，告诉用户运行 `gh auth login` 或检查网络，不要反复重试。
+- 仓库克隆默认在 `%USERPROFILE%\StudyMate-Trae-CN`；不存在时先 `git clone https://github.com/Kong134/StudyMate-Trae-CN.git` 到该路径。
+- 用户明确说"先不同步"时跳过。
+
+## 七、不要做的事
 
 - 不要把所有科目塞进一个巨型 `course.json`；一科一目录。
 - 不要预生成一堆没讲过的课件充数；讲一课写一课。

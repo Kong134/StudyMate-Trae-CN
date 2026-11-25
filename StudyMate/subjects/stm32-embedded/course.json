@@ -34,6 +34,19 @@
       "ref": "30-9-6（串口下载 / Bootloader / 选项字节）"
     },
     {
+      "id": "s2b",
+      "title": "Keil MDK5 上手：建工程、配置选项、下载与在线调试",
+      "type": "practice",
+      "layer": 1,
+      "status": "in_progress",
+      "estimated": 90,
+      "summary": "能在 Keil 里从零建出 F103 标准库工程，配对 Device/C/C++/Debug/Utilities 关键选项，编译下载并打断点看变量，遇到常见报错能按四层顺序定位",
+      "prereq": [
+        "s2"
+      ],
+      "lesson": "02b-keil5.md"
+    },
+    {
       "id": "s3",
       "title": "GPIO 输出：推挽、开漏与 LED 驱动",
       "type": "practice",
