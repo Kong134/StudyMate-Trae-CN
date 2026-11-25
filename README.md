@@ -82,6 +82,15 @@ node "study-mate/app/server.mjs" --workspace "StudyMate" --open
 - 对方机器上会得到：桌面「学习搭档」图标、`%USERPROFILE%\StudyMate` 学习工作区、Trae 技能 `study-mate`（左侧栏图标在 Trae CN 里仍然不会出现，这是宿主限制）。
 - 学习数据全是 `StudyMate` 文件夹里的 Markdown / JSON，直接打包拷走就能迁移。
 
+### 手机 / 其他电脑看静态版
+
+仓库里的 `docs/` 已经导出成只读静态站：公式、表格、代码、提示卡都能看，不需要安装 Node，也不需要电脑开着阅读端。
+
+- 访问地址：https://kong134.github.io/StudyMate-Trae-CN/
+- 首次启用：仓库 **Settings → Pages → Build and deployment → Source 选 Deploy from a branch → 分支 `main`、目录 `/docs` → Save**。
+- 课件更新后重新生成：`node tools/build-pages.mjs`，然后提交并推送 `docs/`。
+- 静态版只读；进度、笔记、答题仍用本地阅读端。
+
 ---
 
 ## 使用方法

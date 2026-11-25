@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>看门狗、低功耗与 Flash 参数存储 · STM32 嵌入式开发</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">STM32 嵌入式开发</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">concept</span>
+    <span class="badge ghost">60 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 看门狗：一个只会倒计时的闹钟</a></li><li><a href="#sec-2">2. 低功耗：三种&amp;quot;睡着&amp;quot;的程度</a></li><li><a href="#sec-3">3. Flash 参数存储：掉电不丢的小本子</a></li><li><a href="#sec-4">4. 算一算</a></li><li><a href="#sec-5">5. 动手项目</a></li><li><a href="#sec-6">6. 本课小结</a></li><li><a href="#sec-7">7. 下一课预告</a></li></ol></nav>
+  <h2 id="sec-0">这一课要解决的问题</h2>
+
+<section class="callout goal"><h3 class="callout-title">本课目标</h3><p>读完你能：用独立看门狗让程序&quot;跑飞了能自己回来&quot;；由 LSI 频率和分频算出超时时间；说清睡眠/停机/待机三种低功耗模式的差别和唤醒源；把一组配置参数写进 Flash，断电不丢，并知道擦写 Flash 时最容易踩的坑。</p>
+</section>
+<p>一个能演示的工程和一个能交付的产品之间，差的是三件事：<strong>死机了怎么办、电池能用多久、设置怎么记住</strong>。这一课一次讲完。</p>
+<hr>
+<h2 id="sec-1">1. 看门狗：一个只会倒计时的闹钟</h2>
+<p>嵌入式设备常常无人值守：装在电表里、挂在墙上、埋在车里。程序一旦因为干扰、指针跑飞、某个 while 卡死，就永远不会自己好。</p>
+<p>看门狗（Watchdog）的思路极其朴素：<strong>一个独立的倒计时器，时间到了就复位整个芯片</strong>。程序正常运行时，必须在它到点前&quot;喂&quot;它一次（重置计数）；程序卡死了，自然喂不了，芯片就被强制重启。</p>
+<p>关键是：这个倒计时器<strong>不依赖主程序</strong>，用的是独立的时钟源（LSI，内部约 40kHz RC 振荡器），即使系统时钟挂了它还在跑。</p>
+<h3>1.1 独立看门狗 IWDG 的时间怎么算</h3>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>超时时间</mtext><mo>=</mo><mfrac><mrow><mtext>预分频</mtext><mo>×</mo><mtext>重装值</mtext></mrow><msub><mi>f</mi><mrow><mi>L</mi><mi>S</mi><mi>I</mi></mrow></msub></mfrac></mrow><annotation encoding="application/x-tex">\text{超时时间} = \frac{\text{预分频} \times \text{重装值}}{f_{LSI}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">超时时间</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.2408em;vertical-align:-0.8804em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.05764em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.07847em;">I</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">预分频</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord cjk_fallback">重装值</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>L</mi><mi>S</mi><mi>I</mi></mrow></msub><mo>≈</mo><mn>40</mn><mi>k</mi><mi>H</mi><mi>z</mi></mrow><annotation encoding="application/x-tex">f_{LSI} \approx 40kHz</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.05764em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.07847em;">I</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">40</span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord mathnormal" style="margin-right:0.04398em;">Hz</span></span></span></span>（注意：RC 振荡器，<strong>误差可达 ±50%</strong>，实际可能 30~60kHz）</li>
+<li>预分频可选 4 / 8 / 16 / 32 / 64 / 128 / 256</li>
+<li>重装值是 12 位，0~4095</li>
+</ul>
+<p>例：要 1 秒超时。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>1</mn><mi>s</mi><mo>=</mo><mfrac><mrow><mtext>预分频</mtext><mo>×</mo><mtext>重装值</mtext></mrow><mn>40000</mn></mfrac></mrow><annotation encoding="application/x-tex">1s = \frac{\text{预分频} \times \text{重装值}}{40000}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0463em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">40000</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">预分频</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord cjk_fallback">重装值</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>取预分频 64：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>40000</mn><mi mathvariant="normal">/</mi><mn>64</mn><mo>=</mo><mn>625</mn><mi>H</mi><mi>z</mi></mrow><annotation encoding="application/x-tex">40000 / 64 = 625Hz</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">40000/64</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">625</span><span class="mord mathnormal" style="margin-right:0.04398em;">Hz</span></span></span></span>，重装值 = <strong>625</strong> → 正好 1 秒。</p>
+
+<section class="callout warn"><h3 class="callout-title">LSI 误差 ±50%，所以别把超时卡太紧</h3><p>因为 LSI 是 RC 振荡器，标称 40kHz 实际可能是 30kHz 或 60kHz。你算出来 1 秒，实际可能是 0.67 秒或 1.33 秒。</p>
+<p>如果你按&quot;1 秒超时、每 900ms 喂一次&quot;设计，遇到 LSI 偏快的芯片（60kHz → 实际 0.67s 超时），<strong>正常程序也会被反复复位</strong>。现象是：板子每隔不到 1 秒重启一次，串口反复打印启动信息，但代码逻辑明明没问题。</p>
+<p><strong>经验：喂狗周期不超过理论超时的 1/2</strong>。要 1 秒超时，就配 2 秒，然后每 500ms 喂一次。</p>
+</section>
+<h3>1.2 喂狗喂在哪：这是设计问题，不是代码问题</h3>
+<p>真实工程里，<code>main.c</code> 只做初始化、排任务顺序，<strong>喂狗的&quot;条件判断&quot;放在 Hardware 层的一个小模块里</strong>。这样 App 层想知道&quot;系统还算健康吗&quot;只需要调一个接口，不用关心 IWDG 句柄和标志位。</p>
+<p><strong>文件：<code>Hardware/Inc/bsp_iwdg.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_IWDG_H
+#define __BSP_IWDG_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+/* 三个必须&quot;完整跑完&quot;的关键任务，用位表示；新增受监控任务就加一个枚举 */
+typedef enum {
+    BSP_IWDG_TASK_KEY = 0,
+    BSP_IWDG_TASK_DISPLAY,
+    BSP_IWDG_TASK_SENSOR,
+    BSP_IWDG_TASK_NUM
+} BSP_IwdgTask_t;
+
+void BSP_IwdgStart(void);                     /* 进主循环前调用一次 */
+void BSP_IwdgMarkDone(BSP_IwdgTask_t task);   /* 某个任务正常跑完一圈 */
+void BSP_IwdgPoll(void);                      /* 全绿才喂狗，并清标志 */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_IWDG_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_iwdg.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_iwdg.h&quot;
+#include &quot;iwdg.h&quot;      /* hiwdg 与 MX_IWDG_Init() 的声明在 Core/Inc/iwdg.h */
+
+/* 3 个任务 → 0b111；用枚举数算，加任务时这里不用改 */
+#define BSP_IWDG_ALL_DONE   ((uint8_t)((1U &lt;&lt; BSP_IWDG_TASK_NUM) - 1U))
+
+/* 只在主循环和它调用的任务里访问，不需要原子操作；volatile 防止编译器优化掉轮询 */
+static volatile uint8_t s_done_mask;
+
+void BSP_IwdgStart(void)
+{
+    s_done_mask = 0;
+
+    /* 调试器暂停内核时冻结 IWDG 计数：DBGMCU_CR 的 IWDG_STOP 位 */
+    __HAL_DBGMCU_FREEZE_IWDG();
+
+    /* 进循环前先喂一次，从完整超时（约 2 秒）重新倒计时 */
+    HAL_IWDG_Refresh(&amp;hiwdg);
+}
+
+void BSP_IwdgMarkDone(BSP_IwdgTask_t task)
+{
+    if ((uint32_t)task &lt; (uint32_t)BSP_IWDG_TASK_NUM) {
+        s_done_mask |= (uint8_t)(1U &lt;&lt; (uint32_t)task);
+    }
+}
+
+void BSP_IwdgPoll(void)
+{
+    if (s_done_mask == BSP_IWDG_ALL_DONE) {
+        HAL_IWDG_Refresh(&amp;hiwdg);   /* 三个任务都跑完，才算系统活着 */
+        s_done_mask = 0;            /* 清标志，下一圈重新计 */
+    }
+}
+</code></pre>
+<p>IWDG 的句柄和初始化是 CubeMX 生成的，单独放在 <code>Core/Src/iwdg.c</code>，<strong>不要手写寄存器</strong>：</p>
+<p><strong>文件：<code>Core/Inc/iwdg.h</code></strong></p>
+<pre><code class="language-c">#ifndef __IWDG_H__
+#define __IWDG_H__
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+extern IWDG_HandleTypeDef hiwdg;
+
+void MX_IWDG_Init(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __IWDG_H__ */
+</code></pre>
+<p><strong>文件：<code>Core/Src/iwdg.c</code></strong></p>
+<pre><code class="language-c">/* CubeMX 生成：System Core → IWDG 勾选后自动产生，参数改这里或改 .ioc 重新生成 */
+#include &quot;iwdg.h&quot;
+
+IWDG_HandleTypeDef hiwdg;
+
+void MX_IWDG_Init(void)
+{
+  hiwdg.Instance = IWDG;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_64;   /* 64 分频：40000/64 = 625Hz */
+  hiwdg.Init.Reload = 1250;                   /* 625Hz 下计 1250 次 = 2 秒 */
+  if (HAL_IWDG_Init(&amp;hiwdg) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+</code></pre>
+<p><code>main.c</code> 里只剩&quot;初始化 + 按顺序跑任务 + 报进度&quot;：</p>
+<p><strong>文件：<code>Core/Src/main.c</code></strong></p>
+<pre><code class="language-c">#include &quot;main.h&quot;
+#include &quot;gpio.h&quot;
+#include &quot;adc.h&quot;
+#include &quot;usart.h&quot;
+#include &quot;iwdg.h&quot;
+#include &quot;bsp_iwdg.h&quot;
+#include &quot;app_main.h&quot;
+
+void SystemClock_Config(void);
+
+int main(void)
+{
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_ADC1_Init();
+  MX_USART1_UART_Init();
+  MX_IWDG_Init();          /* 预分频 64、重装值 1250 → 约 2 秒 */
+
+  BSP_IwdgStart();         /* 冻结调试计数 + 首次喂狗 */
+  App_Init();              /* 参数读取、串口/ADC 初始化，实现在 App/Src/app_main.c */
+
+  while (1)
+  {
+    App_TaskKey();     BSP_IwdgMarkDone(BSP_IWDG_TASK_KEY);
+    App_TaskDisplay(); BSP_IwdgMarkDone(BSP_IWDG_TASK_DISPLAY);
+    App_TaskSensor();  BSP_IwdgMarkDone(BSP_IWDG_TASK_SENSOR);
+
+    BSP_IwdgPoll();          /* 三件事都做完才喂狗 */
+    HAL_Delay(10);           /* 一圈约几十 ms，远小于 2 秒超时 */
+  }
+}
+
+/* CubeMX 生成的 72MHz 时钟配置：HSE 8MHz × 9 = 72MHz，APB1 二分频 36MHz */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef osc = {0};
+  RCC_ClkInitTypeDef clk = {0};
+
+  osc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  osc.HSEState       = RCC_HSE_ON;
+  osc.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  osc.HSIState       = RCC_HSI_ON;
+  osc.PLL.PLLState   = RCC_PLL_ON;
+  osc.PLL.PLLSource  = RCC_PLLSOURCE_HSE;
+  osc.PLL.PLLMUL     = RCC_PLL_MUL9;
+  if (HAL_RCC_OscConfig(&amp;osc) != HAL_OK) { Error_Handler(); }
+
+  clk.ClockType      = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                       RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  clk.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
+  clk.AHBCLKDivider  = RCC_SYSCLK_DIV1;
+  clk.APB1CLKDivider = RCC_HCLK_DIV2;   /* 36MHz，USART2/3 用 */
+  clk.APB2CLKDivider = RCC_HCLK_DIV1;   /* 72MHz，USART1/SPI1 用 */
+  if (HAL_RCC_ClockConfig(&amp;clk, FLASH_LATENCY_2) != HAL_OK) { Error_Handler(); }
+}
+
+void Error_Handler(void)
+{
+  __disable_irq();
+  while (1) { }
+}
+</code></pre>
+<p><strong>为什么这样拆</strong>：<code>main.c</code> 变成一张&quot;流程表&quot;，喂狗的判据在 <code>bsp_iwdg.c</code> 里，谁都能复用；<code>iwdg.c</code> 是 CubeMX 的地盘，改超时只改它的两个参数，不会碰到业务代码。</p>
+<p><strong>为什么这样写</strong>：<code>HAL_IWDG_Refresh()</code> 本质是往 IWDG 的键寄存器写 <code>0xAAAA</code>，把 12 位计数器重新装回 1250；这行必须每圈都真的执行到，狗才有意义。先跑任务、后判标志，是因为&quot;喂狗&quot;要代表&quot;所有关键任务都正常结束&quot;——只喂不管任务，等于养了狗却不给它看门。</p>
+<p><strong>为什么不用别的写法</strong>：别在 SysTick/TIM 中断里喂（见下面的警告）；也别靠 <code>HAL_Delay</code> 的时长&quot;顺便&quot;喂，任务一旦把自己卡住，循环根本回不来。除 IWDG 就只有 WWDG（1.3 节），它由 PCLK1 驱动，防不了时钟故障，还要卡&quot;喂早了也复位&quot;的窗口，新手先用 IWDG。</p>
+<p><strong>哪些没写</strong>：LSI 使能、预分频与重装值的寄存器操作、<code>HAL_IWDG_MspInit()</code> 都由 CubeMX 生成（<code>Core/Src/stm32f1xx_hal_msp.c</code>）；<code>MX_IWDG_Init()</code> 在 <code>Core/Src/iwdg.c</code> 里，不用碰 <code>IWDG-&gt;KR</code>、<code>IWDG-&gt;PR</code>。要改超时就改 CubeMX 那两个参数，别去改喂狗代码。</p>
+
+<section class="callout warn"><h3 class="callout-title">把喂狗放进定时器中断里，是典型的&quot;假看门狗&quot;</h3><p>很多人图省事，在 1ms 的 SysTick 中断里喂狗。这样做的后果：</p>
+<ul>
+<li>主循环里某个 <code>while</code> 卡死了，<strong>中断照样在跑、狗照样被喂</strong>，芯片永远不会复位。看门狗形同虚设。</li>
+</ul>
+<p>看门狗要监控的是&quot;<strong>整个系统还活着</strong>&quot;，所以喂狗动作必须放在<strong>主循环</strong>里，且要确认所有关键任务都执行过了。</p>
+<p>更严谨的做法：每个任务执行完置一个标志位，主循环检查&quot;所有标志都置位&quot;才喂狗、并清标志（就是上面的 <code>BSP_IwdgMarkDone()</code> + <code>BSP_IwdgPoll()</code>）。这样任何一个任务卡住，都会导致不喂狗。</p>
+</section>
+
+<section class="callout warn"><h3 class="callout-title">调试时被狗咬</h3><p>用 ST-Link 单步调试时，程序停在断点上，看门狗还在跑。一会儿芯片就复位了，调试根本没法进行。</p>
+<p>解决办法已经写进 <code>Hardware/Src/bsp_iwdg.c</code> 的 <code>BSP_IwdgStart()</code> 第一行：<code>__HAL_DBGMCU_FREEZE_IWDG();</code>。</p>
+<p>它置 <code>DBGMCU_CR</code> 的 <code>IWDG_STOP</code> 位：内核被调试器停住时，IWDG 计数也停。它不占 RAM、不改超时，只是告诉调试单元&quot;我暂停时别让狗接着跑&quot;。这是 HAL 的宏，<code>main.h</code> 里已经包含 <code>stm32f1xx_hal.h</code>，不用额外 <code>#include</code>；<code>DBGMCU</code> 也不用手动开时钟（调试单元常供电）。</p>
+<p>不写它的代价：单步时每停 2 秒芯片复位一次，你会以为自己代码跑飞了。<strong>为什么不用别的</strong>：靠调试器配置里勾 freeze，换台电脑或新建工程就忘了；调试时干脆不初始化 IWDG，则是把狗关了做实验，问题会留到现场。</p>
+<p><strong>不加这一句，你会以为是自己代码有 bug。</strong></p>
+</section>
+<h3>1.3 窗口看门狗 WWDG 一句话</h3>
+<p>WWDG 多一个&quot;窗口&quot;限制：<strong>喂早了也会复位</strong>。</p>
+<ul>
+<li>它由 PCLK1 驱动（不是独立时钟），所以主时钟挂了它也不跑，不能防时钟故障。</li>
+<li>用途是监控&quot;<strong>程序跑得太快</strong>&quot;——比如某个循环本该 10ms 跑一圈，结果 1ms 就转完了（跳过了某些步骤），提前喂狗会被 WWDG 抓住。</li>
+</ul>
+<p><strong>新手先用 IWDG。</strong> WWDG 是给&quot;时序正确性&quot;做保险的，面窄。</p>
+<hr>
+<h2 id="sec-2">2. 低功耗：三种&quot;睡着&quot;的程度</h2>
+<p>STM32F103 有三种低功耗模式，区别在于<strong>关掉了多少东西</strong>。</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>关掉什么</th>
+<th>典型电流</th>
+<th>唤醒源</th>
+<th>唤醒后</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>睡眠 Sleep</strong></td>
+<td>只停 CPU 时钟</td>
+<td>几 mA</td>
+<td><strong>任意中断</strong></td>
+<td>继续执行</td>
+</tr>
+<tr>
+<td><strong>停机 Stop</strong></td>
+<td>所有时钟（含 HSE/PLL）</td>
+<td>~20μA</td>
+<td><strong>EXTI 线</strong></td>
+<td>继续执行（时钟恢复）</td>
+</tr>
+<tr>
+<td><strong>待机 Standby</strong></td>
+<td>1.8V 域也断电，SRAM 丢失</td>
+<td>~2μA</td>
+<td><strong>WKUP 引脚 / RTC / IWDG</strong></td>
+<td><strong>相当于复位</strong>，从头跑</td>
+</tr>
+</tbody></table>
+<svg class="diagram" viewBox="0 0 860 220" xmlns="http://www.w3.org/2000/svg">
+  <rect x="40" y="60" width="220" height="90" rx="8" fill="none" stroke="#2c6fbb" stroke-width="2"/>
+  <text class="sub" x="96" y="96" font-size="12">Sleep</text>
+  <text class="sub" x="68" y="120" font-size="10">CPU 停，外设都在</text>
+
+  <rect x="310" y="60" width="220" height="90" rx="8" fill="none" stroke="#2c6fbb" stroke-width="2"/>
+  <text class="sub" x="374" y="96" font-size="12">Stop</text>
+  <text class="sub" x="330" y="120" font-size="10">时钟全停，SRAM 保留</text>
+
+  <rect x="580" y="60" width="220" height="90" rx="8" fill="none" stroke="#c0392b" stroke-width="2"/>
+  <text class="sub" x="646" y="96" font-size="12">Standby</text>
+  <text class="sub" x="600" y="120" font-size="10">几乎全断，醒来像复位</text>
+
+<p>  <text class="sub" x="40" y="190" font-size="10">越往右越省电，也越&quot;难叫醒&quot;、醒来越&quot;健忘&quot;。</text>
+</svg></p>
+<h3>2.1 进 Sleep 只要一行</h3>
+<p>低功耗的&quot;进/出&quot;封装统一放 <code>Hardware/bsp_power.c</code>，<code>App</code> 层只决定&quot;什么时候可以睡&quot;。</p>
+<p><strong>文件：<code>Hardware/Inc/bsp_power.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_POWER_H
+#define __BSP_POWER_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+void BSP_PowerSleepOnce(void);       /* 睡到下一个中断，醒来从下一句继续 */
+void BSP_PowerEnterStopOnce(void);   /* 睡到 EXTI 唤醒，醒来自动重配 72MHz */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_POWER_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_power.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_power.h&quot;
+#include &quot;bsp_iwdg.h&quot;
+
+/* SystemClock_Config() 定义在 Core/Src/main.c（CubeMX 生成），这里只声明 */
+void SystemClock_Config(void);
+
+/* Sleep：只关 CPU 时钟，外设、时钟树、SRAM 全不动，任何中断都能唤醒 */
+void BSP_PowerSleepOnce(void)
+{
+    __WFI();   /* CMSIS intrinsic，编译成一条 WFI 指令 */
+}
+
+/* Stop：关 HSE/PLL，SRAM 保留，只能由 EXTI 线唤醒 */
+void BSP_PowerEnterStopOnce(void)
+{
+    BSP_IwdgStart();                       /* 0. 睡前喂狗并清任务标志（IWDG 在 Stop 里仍在跑） */
+
+    HAL_SuspendTick();                     /* 1. 关 SysTick 中断，否则 1ms 就被叫醒 */
+
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,   /* 2. 低压稳压器供电，SRAM 保住 */
+                          PWR_STOPENTRY_WFI);         /*    WFI 睡下，等 EXTI */
+
+    /* 3. 硬件已把系统时钟切回 HSI 8MHz，HSE/PLL 是停的 */
+    SystemClock_Config();                  /* 4. 重跑 HSE→PLL→72MHz */
+    HAL_ResumeTick();                      /* 5. 恢复 1ms 时基，HAL_Delay 才能计时 */
+}
+</code></pre>
+<p><strong>为什么 Sleep 就一行</strong>：Sleep 只关 CPU 时钟，外设、时钟树、SRAM 全不动，所以没有任何寄存器要配；<code>__WFI()</code> 是 CMSIS intrinsic，编译出来就是一条 <code>WFI</code> 指令。醒来从下一句继续跑，局部变量都还在。</p>
+<p><strong>为什么不用别的</strong>：它只把几 mA 降到 1~2mA，适合&quot;等几十毫秒&quot;的场合；要到 μA 级必须用 2.2 的 Stop，代价是多一堆收尾。</p>
+<p><strong>哪些没写</strong>：进入/退出 Sleep 不需要 <code>HAL_PWR_xxx</code>，也不用重配时钟，这是它比 Stop 省心的地方。但&quot;什么时候允许睡&quot;要你自己判断，比如主循环里 <code>if (!key_pending &amp;&amp; !uart_busy) BSP_PowerSleepOnce();</code>，库不会替你做调度。</p>
+<h3>2.2 进 Stop 要配 EXTI</h3>
+<p>2.1 的 <code>BSP_PowerEnterStopOnce()</code> 就是完整的 Stop 流程：先喂一次狗，再按五步走，顺序不能换：</p>
+<ol>
+<li><strong><code>HAL_SuspendTick()</code></strong>：SysTick 是内核异常，睡下后它照样每 1ms 到期把 CPU 叫醒，现象是&quot;电流几乎没降&quot;。</li>
+<li><strong><code>HAL_PWR_EnterSTOPMode()</code></strong>：<code>PWR_LOWPOWERREGULATOR_ON</code> 让 1.8V 域继续供电，SRAM 内容保住；<code>PWR_STOPENTRY_WFI</code> 用等待中断的方式进入。</li>
+<li><strong>醒来</strong>：硬件自动把系统时钟切回 HSI 8MHz，HSE/PLL 已经停了。</li>
+<li><strong><code>SystemClock_Config()</code></strong>：重跑 72MHz。不重配，串口波特率按 8MHz 算会差 9 倍，看到的就是满屏乱码。</li>
+<li><strong><code>HAL_ResumeTick()</code></strong>：恢复 HAL 时基，<code>HAL_Delay</code> 才有正确的毫秒计数。</li>
+</ol>
+<p><strong>为什么是这个顺序</strong>：先停 Tick 才能真的睡下去，先恢复时钟才能让后面所有依赖 72MHz 的外设正常工作。把 <code>SystemClock_Config()</code> 放在 <code>HAL_ResumeTick()</code> 之后也常见，但<strong>必须</strong>在第一次用串口/定时器之前。</p>
+<p><strong>为什么不用别的</strong>：<code>PWR_STOPENTRY_WFE</code> 用&quot;事件&quot;唤醒，任何外设事件都行、不用 EXTI，但你分不清是谁叫醒的；课程统一 WFI + EXTI，唤醒源明确。想再省一个数量级就上 Standby（2.3），代价是醒来等于复位。</p>
+<p><strong>哪些没写</strong>：<code>__HAL_RCC_PWR_CLK_ENABLE()</code> 在 CubeMX 的 <code>HAL_PWR_MspInit()</code> 里，EXTI 的引脚映射和 NVIC 使能在 <code>MX_GPIO_Init()</code> 里（<code>Core/Src/gpio.c</code>），<code>SystemClock_Config()</code> 也是 CubeMX 生成——这三处都不该手写。</p>
+
+<section class="callout warn"><h3 class="callout-title">Stop 模式最常见的三个坑</h3><ol>
+<li><strong>没停 SysTick</strong>：<code>HAL_Delay</code> 依赖 SysTick，它每 1ms 中断一次，刚进 Stop 就被叫醒。现象是&quot;电流没降下来，停在 20mA 而不是 20μA&quot;。</li>
+<li><strong>唤醒后没重配时钟</strong>：Stop 唤醒后系统默认跑 HSI 8MHz，串口波特率全错、定时全慢 9 倍。现象是&quot;唤醒后串口全是乱码&quot;。</li>
+<li><strong>用普通 GPIO 中断唤醒</strong>：Stop 模式只有 <strong>EXTI 线</strong>能唤醒，且引脚要提前配成 EXTI。光配成普通输入中断不会唤醒。</li>
+</ol>
+</section>
+
+<section class="callout note"><h3 class="callout-title">看门狗在 Stop 模式里还在跑</h3><p>这条很容易被忽略：STM32F1 的 IWDG 挂在 VDD 域，<strong>进入 Stop 后它照样计数</strong>（Standby 才停）。</p>
+<p>所以&quot;2 秒看门狗 + 进 Stop 等按键&quot;会互相打架：用户 3 秒不按键，芯片就被狗复位。工程上有三种处理：</p>
+<ol>
+<li><strong>限制睡眠时长</strong>：按 RTC 或定时唤醒，每段睡眠 &lt; 超时的 1/2，醒来立刻喂狗再睡（最正规）。</li>
+<li><strong>改选项字节</strong>：用 STM32CubeProgrammer 把 <code>IWDG_STOP</code> 置 1，Stop 时冻结看门狗（需要重新上电生效）。</li>
+<li><strong>接受复位</strong>：本课项目把参数存在 Flash，复位不丢配置，醒来重新初始化即可（演示够用，产品不建议）。</li>
+</ol>
+<p>面试里能主动说出这一条，说明你真的跑过低功耗 + 看门狗。</p>
+</section>
+<h3>2.3 Standby 适合&quot;长期待机、偶尔工作&quot;</h3>
+<p>传感器节点可以这样设计：采集 100ms → 进 Standby → RTC 闹钟 10 分钟后唤醒（实际是复位重跑）→ 再采集。</p>
+<p>代价：<strong>醒来等于复位</strong>，所有 RAM 变量清零，必须把状态存进 Flash 或 BKP 备份寄存器才能延续。</p>
+
+<section class="callout note"><h3 class="callout-title">三种模式怎么选：看&quot;多久醒一次&quot;</h3><ul>
+<li>醒来频繁（几十 ms 一次，比如键盘扫描）：<strong>Sleep</strong>。省得不多，但恢复快，代码不用改。</li>
+<li>醒来较慢（几百 ms ~ 几秒，比如无线收发间隙）：<strong>Stop</strong>。省 100 倍电流，代价是重配时钟。</li>
+<li>醒来很慢（分钟级以上，比如水表上报）：<strong>Standby</strong>。省到极致，代价是状态要持久化。</li>
+</ul>
+<p><strong>别为了省几微安把系统搞得极复杂</strong>——先算清楚电池容量和平均电流，再决定值不值得。</p>
+</section>
+<hr>
+<h2 id="sec-3">3. Flash 参数存储：掉电不丢的小本子</h2>
+<p>s14 讲过外部 SPI Flash。这一节讲<strong>芯片内部的 Flash</strong>——不用外接器件，直接用自己的程序区旁边那块空间存参数。</p>
+<p>F103C8T6 有 <strong>64KB Flash</strong>，组织方式：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>起始地址</td>
+<td><strong>0x08000000</strong></td>
+</tr>
+<tr>
+<td>容量</td>
+<td>64KB（0x08000000 ~ 0x0800FFFF）</td>
+</tr>
+<tr>
+<td>页大小</td>
+<td><strong>1KB</strong></td>
+</tr>
+<tr>
+<td>页数</td>
+<td>64 页</td>
+</tr>
+<tr>
+<td>擦除单位</td>
+<td><strong>页（1KB）</strong></td>
+</tr>
+<tr>
+<td>写入单位</td>
+<td><strong>半字（16 位 / 2 字节）</strong></td>
+</tr>
+<tr>
+<td>擦除后</td>
+<td>全 <strong>0xFF</strong></td>
+</tr>
+</tbody></table>
+<p>和外部 Flash 的规律一样：<strong>只能 1→0，擦除才能变回 1</strong>。</p>
+<h3>3.1 选哪一页存参数</h3>
+<p>程序从 0x08000000 开始放，编译出来可能占 10~20KB。<strong>参数要放在最后一页</strong>，避开程序：</p>
+<pre><code>参数页地址 = 0x08000000 + 64KB - 1KB = 0x0800FC00
+</code></pre>
+
+<section class="callout warn"><h3 class="callout-title">擦错页 = 程序自毁</h3><p>Flash 的擦除是<strong>整页 1KB</strong>。如果你把参数页地址算成了程序所在的页，一擦就把代码擦掉了。</p>
+<p>现象：擦除后程序立刻跑飞、HardFault，或者复位后<strong>完全没反应</strong>（连启动信息都不打），只能重新烧录。</p>
+<p><strong>保险做法</strong>：在链接脚本/编译输出里确认程序实际占多大（<code>.map</code> 文件或 CubeIDE 的 Build Analyzer），参数页至少留出 1KB 余量。改代码后体积会变，重新确认一次。</p>
+</section>
+<h3>3.2 HAL 擦写流程</h3>
+<p>参数读写的全部实现放在 <code>Hardware/bsp_flash.c</code>，对外只暴露&quot;加载 / 保存 / 恢复默认&quot;三个接口。</p>
+<p><strong>文件：<code>Hardware/Inc/bsp_flash.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_FLASH_H
+#define __BSP_FLASH_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+/* 最后一页：0x08000000 + 64KB - 1KB。改容量/改页大小必须同步改这里 */
+#define PARAM_ADDR    0x0800FC00U
+#define PARAM_MAGIC   0xA5A55A5AU
+#define PARAM_DEFAULT_SAMPLE_MS   1000U
+#define PARAM_DEFAULT_ALARM_MV    2500U
+
+typedef struct {
+    uint32_t magic;        /* 写过参数页的标记 */
+    uint32_t sample_ms;    /* 采样间隔 */
+    uint16_t alarm_mv;     /* 报警阈值 */
+    uint16_t crc;          /* 覆盖前面所有字段，防写一半断电 */
+} Param_t;
+
+void        Param_Load(Param_t *p);          /* 读，magic/CRC 不对就填默认值 */
+void        Param_Save(const Param_t *p);    /* 解锁→擦页→半字写→上锁 */
+void        Param_Reset(Param_t *p);         /* 恢复默认值（只改 RAM，不写 Flash） */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_FLASH_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_flash.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_flash.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stddef.h&gt;
+
+/* 编译期护栏：结构体一旦涨过一页，编译直接失败，而不是运行时擦掉程序 */
+typedef char param_size_guard[(sizeof(Param_t) &lt;= 1024U) ? 1 : -1];
+
+/* CRC16-CCITT：多项式 0x1021，初值 0xFFFF，覆盖 magic + 数据字段 */
+static uint16_t Crc16(const uint8_t *p, uint32_t len)
+{
+    uint16_t crc = 0xFFFFU;
+    while (len--) {
+        crc ^= (uint16_t)(*p++) &lt;&lt; 8;
+        for (uint8_t i = 0; i &lt; 8U; i++) {
+            crc = (crc &amp; 0x8000U) ? (uint16_t)((crc &lt;&lt; 1) ^ 0x1021U)
+                                  : (uint16_t)(crc &lt;&lt; 1);
+        }
+    }
+    return crc;
+}
+
+void Param_Reset(Param_t *p)
+{
+    p-&gt;magic     = PARAM_MAGIC;
+    p-&gt;sample_ms = PARAM_DEFAULT_SAMPLE_MS;
+    p-&gt;alarm_mv  = PARAM_DEFAULT_ALARM_MV;
+    p-&gt;crc       = Crc16((const uint8_t *)p, offsetof(Param_t, crc));
+}
+
+/* 读：内部 Flash 可以直接当内存读 */
+void Param_Load(Param_t *p)
+{
+    memcpy(p, (const void *)PARAM_ADDR, sizeof(Param_t));
+
+    if (p-&gt;magic != PARAM_MAGIC) {          /* 从没写过，或者被擦除了 */
+        Param_Reset(p);
+        return;
+    }
+    if (p-&gt;crc != Crc16((const uint8_t *)p, offsetof(Param_t, crc))) {
+        Param_Reset(p);                     /* 写一半断电：退回默认值 */
+    }
+}
+
+/* 写：解锁 → 擦页 → 按半字写 → 上锁 */
+void Param_Save(const Param_t *p)
+{
+    FLASH_EraseInitTypeDef er = {0};
+    uint32_t page_err = 0;
+    Param_t tmp = *p;
+    uint16_t *src = (uint16_t *)&amp;tmp;
+
+    /* CRC 覆盖 magic + 数据，先算好再落盘 */
+    tmp.crc = Crc16((const uint8_t *)&amp;tmp, offsetof(Param_t, crc));
+
+    HAL_FLASH_Unlock();                     /* 往 FLASH-&gt;KEYR 写 0x45670123、0xCDEF89AB */
+
+    er.TypeErase   = FLASH_TYPEERASE_PAGES;
+    er.PageAddress = PARAM_ADDR;            /* F1 填页首地址，没有 Sector 编号 */
+    er.NbPages     = 1;
+    if (HAL_FLASHEx_Erase(&amp;er, &amp;page_err) != HAL_OK) {
+        HAL_FLASH_Lock();
+        return;
+    }
+
+    /* F1 只有半字（16 位）编程；长度按半字向上取整 */
+    for (uint32_t i = 0; i &lt; (sizeof(Param_t) + 1U) / 2U; i++) {
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD,
+                              PARAM_ADDR + i * 2U, src[i]) != HAL_OK) {
+            HAL_FLASH_Lock();
+            return;
+        }
+    }
+
+    HAL_FLASH_Lock();                       /* 重新上锁，防跑飞的指针改程序区 */
+}
+</code></pre>
+<p><strong>为什么是这四步</strong>：<code>HAL_FLASH_Unlock()</code> 不写的话，后面的擦/写都会被硬件拒绝、返回 <code>HAL_ERROR</code>。擦除只能按页，<code>PageAddress</code> 填页首、<code>NbPages = 1</code>；F1 的页没有编号字段，不像 F4 要填 <code>Banks</code>、<code>Sector</code>。写入必须半字，所以把结构体当 <code>uint16_t*</code> 遍历；<code>(sizeof+1)/2</code> 是向上取整，防止奇数长度漏写最后半个字。末尾 <code>HAL_FLASH_Lock()</code> 重新上锁。</p>
+<p><strong>为什么加 CRC 和编译期护栏</strong>：magic 只能证明&quot;这页看起来写过&quot;，不能证明&quot;写完过&quot;——擦除后先写 magic 再写数据的中途断电，magic 对、数据烂。CRC 覆盖 magic + 数据字段，能抓住这种半成品。<code>param_size_guard</code> 用负长度数组在编译期报错（<code>sizeof</code> 超过 1KB 时数组长度变 -1），比运行时擦掉程序安全。</p>
+<p><strong>为什么不用别的</strong>：不能&quot;改一个字节&quot;（整页擦）；也不能用 <code>memcpy(p, ...)</code> 往 Flash 地址写——那只是 RAM 语义的写，不会触发编程，读回来仍是 <code>0xFF</code>。字编程（<code>FLASH_TYPEPROGRAM_WORD</code>）虽然 F103 支持，但要求 4 字节对齐，结构体里有 <code>uint16_t</code> 不好保证，半字最稳。</p>
+<p><strong>哪些没写</strong>：Flash 的等待周期（<code>FLASH-&gt;ACR</code> 的 LATENCY）由 <code>SystemClock_Config()</code> 按 72MHz 配好；没开擦写中断，因为轮询足够（一次页擦几十 ms，这时也没别的事可干）。参数页没在链接脚本里 <code>KEEP</code>，所以 3.1 节&quot;确认程序不越界&quot;必须自己保证。</p>
+
+<section class="callout warn"><h3 class="callout-title">四个最常见的 Flash 写入错误</h3><ol>
+<li><strong>没解锁</strong>：<code>HAL_FLASH_Program</code> 一直返回 <code>HAL_ERROR</code>。现象是&quot;保存了但读出来还是旧值&quot;。</li>
+<li><strong>没擦除就写</strong>：Flash 只能 1→0，旧数据和新数据按位与，读出来是乱码。现象是&quot;参数越存越怪&quot;。</li>
+<li><strong>写入地址不是 2 字节对齐</strong>：半字写入要求地址是偶数，奇数地址直接报错或写坏相邻字节。</li>
+<li><strong>写一半断电</strong>：结构体只写了一部分，<code>magic</code> 对了但数据是旧的/坏的。所以要有 <strong>CRC 或双备份</strong>：写之前先写 <code>magic = 0</code>，写完再写回真 magic；读的时候 magic/CRC 不对就用默认值。</li>
+</ol>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么不用 EEPROM 的思路&quot;只改一个字节&quot;</h3><p>内部 Flash 最小擦除单位是 1KB。要改一个参数，必须：<strong>读出整页 → 在 RAM 里改 → 擦整页 → 整页写回</strong>。</p>
+<p>这意味着：</p>
+<ul>
+<li>擦写次数有限（约 1 万次），频繁保存会磨损（虽然对实验来说完全够）。</li>
+<li>擦除时如果断电，整页数据全丢。所以<strong>要么双页轮换（A 页写坏了用 B 页），要么接受&quot;参数丢失回默认值&quot;</strong>。</li>
+</ul>
+<p>真要频繁、可靠地存参数，用外部 EEPROM（如 AT24C02）或 FRAM。内部 Flash 适合&quot;<strong>偶尔写一次</strong>&quot;的配置。</p>
+</section>
+<hr>
+<h2 id="sec-4">4. 算一算</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：配一个 2 秒的看门狗</h3><p>LSI 按 40kHz 算。要让 IWDG 超时约 2 秒，预分频和重装值怎么取？你实际应该多久喂一次？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>2</mn><mi>s</mi><mo>=</mo><mfrac><mrow><mtext>预分频</mtext><mo>×</mo><mtext>重装值</mtext></mrow><mn>40000</mn></mfrac></mrow><annotation encoding="application/x-tex">2s = \frac{\text{预分频} \times \text{重装值}}{40000}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0463em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">40000</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">预分频</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord cjk_fallback">重装值</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>取预分频 64 → <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>40000</mn><mi mathvariant="normal">/</mi><mn>64</mn><mo>=</mo><mn>625</mn><mi>H</mi><mi>z</mi></mrow><annotation encoding="application/x-tex">40000/64 = 625Hz</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">40000/64</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">625</span><span class="mord mathnormal" style="margin-right:0.04398em;">Hz</span></span></span></span>，重装值 = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>625</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>1250</mn></mrow><annotation encoding="application/x-tex">625 \times 2 = 1250</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">625</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1250</span></span></span></span>（12 位最大 4095，合法）。</p>
+<p>验证：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>64</mn><mo>×</mo><mn>1250</mn><mi mathvariant="normal">/</mi><mn>40000</mn><mo>=</mo><mn>2.0</mn><mi>s</mi></mrow><annotation encoding="application/x-tex">64 \times 1250 / 40000 = 2.0s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">64</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1250/40000</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2.0</span><span class="mord mathnormal">s</span></span></span></span> ✓。</p>
+<p>但 LSI 有 ±50% 误差，实际超时可能是 <strong>1.33s ~ 4s</strong>。按最坏情况（1.33s），喂狗周期必须小于它的一半：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>喂狗周期</mtext><mo>≤</mo><mn>1.33</mn><mi mathvariant="normal">/</mi><mn>2</mn><mo>≈</mo><mn>0.66</mn><mi>s</mi></mrow><annotation encoding="application/x-tex">\text{喂狗周期} \leq 1.33 / 2 \approx 0.66s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8193em;vertical-align:-0.136em;"></span><span class="mord text"><span class="mord cjk_fallback">喂狗周期</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1.33/2</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.66</span><span class="mord mathnormal">s</span></span></span></span></span></p>
+<p>所以主循环<strong>每 500ms 喂一次</strong>是安全的。如果主循环一圈要 800ms，就说明任务太重，该拆分或换更大的超时。</p>
+<p><strong>结论：理论超时 × 0.5 是喂狗上限，再叠加 LSI 误差的余量。</strong></p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：参数页地址</h3><p>F103C8T6 的 Flash 是 64KB，页大小 1KB。程序编译后占 18KB。参数页放在最后一页，地址是多少？为什么不能放在 0x08001000？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>Flash 范围：<code>0x08000000 ~ 0x0800FFFF</code>（64KB = 0x10000 字节）。</p>
+<p>最后一页的起始：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>0</mn><mi>x</mi><mn>08000000</mn><mo>+</mo><mn>64</mn><mi>K</mi><mi>B</mi><mo>−</mo><mn>1</mn><mi>K</mi><mi>B</mi><mo>=</mo><mn>0</mn><mi>x</mi><mn>08000000</mn><mo>+</mo><mn>0</mn><mi>x</mi><mn>10000</mn><mo>−</mo><mn>0</mn><mi>x</mi><mn>400</mn><mo>=</mo><mn>0</mn><mi>x</mi><mn>0800</mn><mi>F</mi><mi>C</mi><mn>00</mn></mrow><annotation encoding="application/x-tex">0x08000000 + 64KB - 1KB = 0x08000000 + 0x10000 - 0x400 = 0x0800FC00</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">08000000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord">64</span><span class="mord mathnormal" style="margin-right:0.07153em;">K</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">1</span><span class="mord mathnormal" style="margin-right:0.07153em;">K</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">08000000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">10000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">400</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">0800</span><span class="mord mathnormal" style="margin-right:0.07153em;">FC</span><span class="mord">00</span></span></span></span></span></p>
+<p><strong>不能放 0x08001000</strong>，因为：</p>
+<ol>
+<li>0x08001000 是第 5 页（偏移 4KB），程序占 18KB 已经覆盖到 0x08004800 附近，<strong>这一页是代码</strong>。一擦就把程序擦掉。</li>
+<li>即使现在程序还没用到那一页，以后加功能就会撞上——这是个<strong>定时炸弹</strong>。</li>
+</ol>
+<p>正确做法：参数页永远放在<strong>最后</strong>（0x0800FC00），并在代码里加编译期断言，保证结构体不会涨过一页。这条断言就是 <code>Hardware/Src/bsp_flash.c</code> 顶部的 <code>typedef char param_size_guard[(sizeof(Param_t) &lt;= 1024U) ? 1 : -1];</code>（上一节的完整文件里已经包含）。</p>
+<p><code>sizeof(Param_t)</code> 超过 1024 时数组长度变成 -1，编译直接失败，而不是运行时踩坏别的页。</p>
+<p><strong>为什么用负长度数组</strong>：老标准 C 没有可用的 <code>static_assert</code> 时，这是唯一能&quot;编译期报错&quot;的手法。<strong>为什么不用别的</strong>：<code>assert</code> 是运行时的，等跑到才发现，那时可能已经擦错页；<code>#if</code> 只能判宏，判不了 <code>sizeof</code>。<strong>哪些没写</strong>：真正拦住&quot;链接器把常量塞进参数页&quot;要靠链接脚本独立 section + <code>KEEP</code>，这行只是自查提醒。</p>
+<p>更严谨的工程会用链接脚本保留这一页（<code>KEEP</code> + 独立的 section），防止编译器把常量放进去。</p>
+</div></details></section>
+<hr>
+<h2 id="sec-5">5. 动手项目</h2>
+
+<section class="callout project"><h3 class="callout-title">动手项目</h3><p><strong>带看门狗和参数记忆的电压记录仪</strong></p>
+<p>在 s15 的 ADC 基础上加三件事：</p>
+<ol>
+<li><strong>IWDG</strong>：2 秒超时，主循环每 500ms 喂一次。</li>
+<li><strong>参数存储</strong>：把&quot;采样间隔&quot;和&quot;报警阈值&quot;存进 <code>0x0800FC00</code>，上电读取，串口命令可修改并保存。</li>
+<li><strong>低功耗</strong>：空闲 5 秒（没有串口命令）后进入 <strong>Stop 模式</strong>，用 EXTI（按键）唤醒。</li>
+</ol>
+<p><strong>验收标准</strong>：</p>
+<ol>
+<li>在代码里故意加一个 <code>while(1);</code>，板子应在 2 秒内<strong>自动复位</strong>并重新打印启动信息（证明看门狗真的在工作）。</li>
+<li>断电再上电，串口打印的采样间隔和阈值是上次保存的值（证明 Flash 写入成功）。</li>
+<li>擦除参数页后上电，参数恢复默认值（证明 magic 判断生效）。</li>
+<li>进 Stop 模式后用万用表测电流，应从几十 mA 降到 <strong>几十 μA</strong> 量级。</li>
+<li>按键能把系统从 Stop 唤醒，且唤醒后串口输出<strong>不乱码</strong>（证明时钟重配了）。</li>
+</ol>
+<p><strong>加分</strong>：给参数加 CRC16，模拟&quot;写到一半断电&quot;（在写入中途手动复位），验证读取时能检测出损坏并回退默认值。</p>
+<h3>5.1 文件放置表</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>文件夹</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>main.c</code></td>
+<td><code>Core/Src</code></td>
+<td>初始化 + 主循环排任务 + 喂狗节奏</td>
+</tr>
+<tr>
+<td><code>main.h</code></td>
+<td><code>Core/Inc</code></td>
+<td>引脚宏、<code>SystemClock_Config</code>/<code>Error_Handler</code> 声明</td>
+</tr>
+<tr>
+<td><code>iwdg.c</code> / <code>iwdg.h</code></td>
+<td><code>Core/Src</code>、<code>Core/Inc</code></td>
+<td>CubeMX 生成的 IWDG 句柄与初始化</td>
+</tr>
+<tr>
+<td><code>bsp_iwdg.c</code> / <code>.h</code></td>
+<td><code>Hardware/Src</code>、<code>Hardware/Inc</code></td>
+<td>三任务标志位 + 条件喂狗</td>
+</tr>
+<tr>
+<td><code>bsp_flash.c</code> / <code>.h</code></td>
+<td><code>Hardware/Src</code>、<code>Hardware/Inc</code></td>
+<td>参数结构体、CRC16、读/写/恢复默认</td>
+</tr>
+<tr>
+<td><code>bsp_power.c</code> / <code>.h</code></td>
+<td><code>Hardware/Src</code>、<code>Hardware/Inc</code></td>
+<td>Sleep / Stop 进出封装</td>
+</tr>
+<tr>
+<td><code>bsp_adc.c</code> / <code>.h</code></td>
+<td><code>Hardware/Src</code>、<code>Hardware/Inc</code></td>
+<td>ADC1_IN0 采样与 mV 换算</td>
+</tr>
+<tr>
+<td><code>bsp_uart.c</code> / <code>.h</code></td>
+<td><code>Hardware/Src</code>、<code>Hardware/Inc</code></td>
+<td>中断收字节、行缓冲、格式化打印</td>
+</tr>
+<tr>
+<td><code>app_main.c</code> / <code>.h</code></td>
+<td><code>App/Src</code>、<code>App/Inc</code></td>
+<td>参数加载、串口命令、采样/上报/低功耗调度</td>
+</tr>
+</tbody></table>
+<p>CubeMX 已经生成、<strong>不需要手写</strong>的：<code>gpio.c</code>（含 KEY1 的 EXTI 配置）、<code>adc.c</code>、<code>usart.c</code>、<code>stm32f1xx_it.c</code>（含 <code>EXTI0_IRQHandler</code>）、<code>stm32f1xx_hal_msp.c</code>、<code>system_stm32f1xx.c</code>、启动文件、链接脚本、<code>Drivers/</code> 整棵树。</p>
+<p>下面按&quot;头文件 → 驱动 <code>.c</code> → App <code>.c</code> → <code>main.c</code>&quot;给全部文件的完整代码。</p>
+<h3>5.2 头文件</h3>
+<p><strong>文件：<code>Core/Inc/main.h</code></strong></p>
+<pre><code class="language-c">#ifndef __MAIN_H
+#define __MAIN_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;stm32f1xx_hal.h&quot;
+
+/* 与 CubeMX 的 .ioc 保持一致；改引脚必须两边一起改 */
+#define KEY1_Pin        GPIO_PIN_0
+#define KEY1_GPIO_Port  GPIOB
+#define LED_Pin         GPIO_PIN_13
+#define LED_GPIO_Port   GPIOC
+
+void Error_Handler(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __MAIN_H */
+</code></pre>
+<p>注意：<code>SystemClock_Config()</code> 不用 <code>static</code>——<code>Hardware/Src/bsp_power.c</code> 从 Stop 唤醒后要调它重配 72MHz，所以它在 <code>main.c</code> 里定义、在 <code>bsp_power.c</code> 顶部 extern 声明。</p>
+<p><strong>文件：<code>Core/Inc/iwdg.h</code></strong></p>
+<pre><code class="language-c">#ifndef __IWDG_H__
+#define __IWDG_H__
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+extern IWDG_HandleTypeDef hiwdg;
+
+void MX_IWDG_Init(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __IWDG_H__ */
+</code></pre>
+<p><strong>文件：<code>Hardware/Inc/bsp_iwdg.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_IWDG_H
+#define __BSP_IWDG_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+typedef enum {
+    BSP_IWDG_TASK_KEY = 0,
+    BSP_IWDG_TASK_DISPLAY,
+    BSP_IWDG_TASK_SENSOR,
+    BSP_IWDG_TASK_NUM
+} BSP_IwdgTask_t;
+
+void BSP_IwdgStart(void);
+void BSP_IwdgMarkDone(BSP_IwdgTask_t task);
+void BSP_IwdgPoll(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_IWDG_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Inc/bsp_flash.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_FLASH_H
+#define __BSP_FLASH_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+#define PARAM_ADDR               0x0800FC00U
+#define PARAM_MAGIC              0xA5A55A5AU
+#define PARAM_DEFAULT_SAMPLE_MS  1000U
+#define PARAM_DEFAULT_ALARM_MV   2500U
+
+typedef struct {
+    uint32_t magic;
+    uint32_t sample_ms;
+    uint16_t alarm_mv;
+    uint16_t crc;
+} Param_t;
+
+void Param_Load(Param_t *p);
+void Param_Save(const Param_t *p);
+void Param_Reset(Param_t *p);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_FLASH_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Inc/bsp_power.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_POWER_H
+#define __BSP_POWER_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+void BSP_PowerSleepOnce(void);
+void BSP_PowerEnterStopOnce(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_POWER_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Inc/bsp_adc.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_ADC_H
+#define __BSP_ADC_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+void     BSP_AdcInit(void);
+uint16_t BSP_AdcReadMv(void);   /* 8 次平均后的毫伏值，3.3V 参考 */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_ADC_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Inc/bsp_uart.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_UART_H
+#define __BSP_UART_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+void    BSP_UartInit(void);
+uint8_t BSP_UartReadLine(char *out, uint16_t out_size);   /* 收到一整行返回 1 */
+void    BSP_UartPrintf(const char *fmt, ...);             /* 阻塞发送，一行几十字节 */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_UART_H */
+</code></pre>
+<h3>5.3 驱动源文件</h3>
+<p><strong>文件：<code>Core/Src/iwdg.c</code></strong></p>
+<pre><code class="language-c">#include &quot;iwdg.h&quot;
+
+IWDG_HandleTypeDef hiwdg;
+
+void MX_IWDG_Init(void)
+{
+  hiwdg.Instance = IWDG;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_64;   /* 40000Hz / 64 = 625Hz */
+  hiwdg.Init.Reload = 1250;                   /* 625 × 2 = 1250 → 2 秒 */
+  if (HAL_IWDG_Init(&amp;hiwdg) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_iwdg.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_iwdg.h&quot;
+#include &quot;iwdg.h&quot;
+
+#define BSP_IWDG_ALL_DONE   ((uint8_t)((1U &lt;&lt; BSP_IWDG_TASK_NUM) - 1U))
+
+static volatile uint8_t s_done_mask;
+
+void BSP_IwdgStart(void)
+{
+    s_done_mask = 0;
+    __HAL_DBGMCU_FREEZE_IWDG();
+    HAL_IWDG_Refresh(&amp;hiwdg);
+}
+
+void BSP_IwdgMarkDone(BSP_IwdgTask_t task)
+{
+    if ((uint32_t)task &lt; (uint32_t)BSP_IWDG_TASK_NUM) {
+        s_done_mask |= (uint8_t)(1U &lt;&lt; (uint32_t)task);
+    }
+}
+
+void BSP_IwdgPoll(void)
+{
+    if (s_done_mask == BSP_IWDG_ALL_DONE) {
+        HAL_IWDG_Refresh(&amp;hiwdg);
+        s_done_mask = 0;
+    }
+}
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_flash.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_flash.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stddef.h&gt;
+
+typedef char param_size_guard[(sizeof(Param_t) &lt;= 1024U) ? 1 : -1];
+
+static uint16_t Crc16(const uint8_t *p, uint32_t len)
+{
+    uint16_t crc = 0xFFFFU;
+    while (len--) {
+        crc ^= (uint16_t)(*p++) &lt;&lt; 8;
+        for (uint8_t i = 0; i &lt; 8U; i++) {
+            crc = (crc &amp; 0x8000U) ? (uint16_t)((crc &lt;&lt; 1) ^ 0x1021U)
+                                  : (uint16_t)(crc &lt;&lt; 1);
+        }
+    }
+    return crc;
+}
+
+void Param_Reset(Param_t *p)
+{
+    p-&gt;magic     = PARAM_MAGIC;
+    p-&gt;sample_ms = PARAM_DEFAULT_SAMPLE_MS;
+    p-&gt;alarm_mv  = PARAM_DEFAULT_ALARM_MV;
+    p-&gt;crc       = Crc16((const uint8_t *)p, offsetof(Param_t, crc));
+}
+
+void Param_Load(Param_t *p)
+{
+    memcpy(p, (const void *)PARAM_ADDR, sizeof(Param_t));
+
+    if (p-&gt;magic != PARAM_MAGIC ||
+        p-&gt;crc != Crc16((const uint8_t *)p, offsetof(Param_t, crc))) {
+        Param_Reset(p);
+    }
+}
+
+void Param_Save(const Param_t *p)
+{
+    FLASH_EraseInitTypeDef er = {0};
+    uint32_t page_err = 0;
+    Param_t tmp = *p;
+    uint16_t *src = (uint16_t *)&amp;tmp;
+
+    tmp.crc = Crc16((const uint8_t *)&amp;tmp, offsetof(Param_t, crc));
+
+    HAL_FLASH_Unlock();
+
+    er.TypeErase   = FLASH_TYPEERASE_PAGES;
+    er.PageAddress = PARAM_ADDR;
+    er.NbPages     = 1;
+    if (HAL_FLASHEx_Erase(&amp;er, &amp;page_err) != HAL_OK) {
+        HAL_FLASH_Lock();
+        return;
+    }
+
+    for (uint32_t i = 0; i &lt; (sizeof(Param_t) + 1U) / 2U; i++) {
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD,
+                              PARAM_ADDR + i * 2U, src[i]) != HAL_OK) {
+            HAL_FLASH_Lock();
+            return;
+        }
+    }
+
+    HAL_FLASH_Lock();
+}
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_power.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_power.h&quot;
+#include &quot;bsp_iwdg.h&quot;
+
+/* SystemClock_Config() 定义在 Core/Src/main.c（CubeMX 生成），这里只声明 */
+void SystemClock_Config(void);
+
+void BSP_PowerSleepOnce(void)
+{
+    __WFI();
+}
+
+void BSP_PowerEnterStopOnce(void)
+{
+    BSP_IwdgStart();                     /* 睡前把看门狗重新计时（见 2.2 的 note） */
+
+    HAL_SuspendTick();
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+
+    SystemClock_Config();                /* HSI 8MHz → HSE/PLL 72MHz */
+    HAL_ResumeTick();
+}
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_adc.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_adc.h&quot;
+#include &quot;adc.h&quot;
+
+#define ADC_SAMPLES   8U
+
+void BSP_AdcInit(void)
+{
+    /* 校准必须在 ADC 使能之后、第一次转换之前；CubeMX 已在 MX_ADC1_Init 里使能 */
+    HAL_ADCEx_Calibration_Start(&amp;hadc1);
+}
+
+uint16_t BSP_AdcReadMv(void)
+{
+    uint32_t sum = 0;
+    uint8_t  n   = 0;
+
+    for (uint8_t i = 0; i &lt; ADC_SAMPLES; i++) {
+        HAL_ADC_Start(&amp;hadc1);
+        if (HAL_ADC_PollForConversion(&amp;hadc1, 10U) == HAL_OK) {
+            sum += HAL_ADC_GetValue(&amp;hadc1);
+            n++;
+        }
+        HAL_ADC_Stop(&amp;hadc1);
+    }
+
+    if (n == 0U) {
+        return 0;
+    }
+    /* 12 位、3.3V 参考：mv = code × 3300 / 4096 */
+    return (uint16_t)((sum * 3300U) / ((uint32_t)n * 4096U));
+}
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_uart.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_uart.h&quot;
+#include &quot;usart.h&quot;
+#include &lt;stdarg.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+#define RX_RING_SIZE   128U
+#define LINE_MAX       64U
+
+static uint8_t  s_ring[RX_RING_SIZE];
+static volatile uint16_t s_head;
+static volatile uint16_t s_tail;
+static char     s_line[LINE_MAX];
+static uint16_t s_line_len;
+static uint8_t  s_rx_byte;
+
+void BSP_UartInit(void)
+{
+    s_head = s_tail = 0;
+    s_line_len = 0;
+    HAL_UART_Receive_IT(&amp;huart1, &amp;s_rx_byte, 1);   /* 每次收 1 字节，中断里再挂下一次 */
+}
+
+/* 覆盖 HAL 的弱回调；SysTick 之外的 USART1 中断入口在 Core/Src/stm32f1xx_it.c */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart-&gt;Instance == USART1) {
+        uint16_t next = (uint16_t)((s_head + 1U) % RX_RING_SIZE);
+        if (next != s_tail) {          /* 满则丢新字节，不覆盖旧数据 */
+            s_ring[s_head] = s_rx_byte;
+            s_head = next;
+        }
+        HAL_UART_Receive_IT(&amp;huart1, &amp;s_rx_byte, 1);
+    }
+}
+
+uint8_t BSP_UartReadLine(char *out, uint16_t out_size)
+{
+    while (s_tail != s_head) {
+        char c = (char)s_ring[s_tail];
+        s_tail = (uint16_t)((s_tail + 1U) % RX_RING_SIZE);
+
+        if (c == &#39;\r&#39; || c == &#39;\n&#39;) {
+            if (s_line_len == 0U) {
+                continue;              /* 连续换行忽略 */
+            }
+            uint16_t n = (s_line_len &lt; (uint16_t)(out_size - 1U))
+                       ? s_line_len : (uint16_t)(out_size - 1U);
+            memcpy(out, s_line, n);
+            out[n] = &#39;\0&#39;;
+            s_line_len = 0;
+            return 1;
+        }
+
+        if (s_line_len &lt; (LINE_MAX - 1U)) {
+            s_line[s_line_len++] = c;
+        } else {
+            s_line_len = 0;            /* 超长行直接丢弃，防止溢出 */
+        }
+    }
+    return 0;
+}
+
+void BSP_UartPrintf(const char *fmt, ...)
+{
+    char buf[96];
+    va_list ap;
+    int n;
+
+    va_start(ap, fmt);
+    n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
+    if (n &lt;= 0) {
+        return;
+    }
+    if (n &gt; (int)sizeof(buf) - 1) {
+        n = (int)sizeof(buf) - 1;
+    }
+    HAL_UART_Transmit(&amp;huart1, (uint8_t *)buf, (uint16_t)n, 100U);
+}
+</code></pre>
+<h3>5.4 App 层</h3>
+<p><strong>文件：<code>App/Inc/app_main.h</code></strong></p>
+<pre><code class="language-c">#ifndef __APP_MAIN_H
+#define __APP_MAIN_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+void App_Init(void);
+void App_TaskKey(void);       /* 解析串口命令行 */
+void App_TaskDisplay(void);   /* 每秒打印一次状态 */
+void App_TaskSensor(void);    /* 按 sample_ms 采样 */
+void App_TaskPower(void);     /* 空闲 5 秒进 Stop */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __APP_MAIN_H */
+</code></pre>
+<p><strong>文件：<code>App/Src/app_main.c</code></strong></p>
+<pre><code class="language-c">#include &quot;app_main.h&quot;
+#include &quot;bsp_adc.h&quot;
+#include &quot;bsp_flash.h&quot;
+#include &quot;bsp_uart.h&quot;
+#include &quot;bsp_power.h&quot;
+#include &quot;bsp_iwdg.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+Param_t  g_param;                 /* 全局唯一一份，App 内部读写 */
+
+static uint16_t s_last_mv;
+static uint32_t s_last_sample_ms;
+static uint32_t s_last_print_ms;
+static uint32_t s_last_cmd_ms;
+
+void App_Init(void)
+{
+    BSP_AdcInit();
+    BSP_UartInit();
+    Param_Load(&amp;g_param);         /* magic/CRC 不对自动回默认值 */
+
+    s_last_sample_ms = HAL_GetTick();
+    s_last_print_ms  = s_last_sample_ms;
+    s_last_cmd_ms    = s_last_sample_ms;
+
+    BSP_UartPrintf(&quot;\r\n[recorder] sample=%lums alarm=%umV\r\n&quot;,
+                   (unsigned long)g_param.sample_ms, (unsigned)g_param.alarm_mv);
+    BSP_UartPrintf(&quot;cmd: get | save | reset | set int &lt;ms&gt; | set th &lt;mv&gt;\r\n&quot;);
+}
+
+void App_TaskKey(void)
+{
+    char line[64];
+    unsigned long v;
+
+    if (BSP_UartReadLine(line, sizeof(line)) == 0U) {
+        return;
+    }
+    s_last_cmd_ms = HAL_GetTick();
+
+    if (strcmp(line, &quot;get&quot;) == 0) {
+        BSP_UartPrintf(&quot;sample=%lums alarm=%umV\r\n&quot;,
+                       (unsigned long)g_param.sample_ms, (unsigned)g_param.alarm_mv);
+    } else if (strcmp(line, &quot;save&quot;) == 0) {
+        Param_Save(&amp;g_param);
+        BSP_UartPrintf(&quot;saved to 0x%08lX\r\n&quot;, (unsigned long)PARAM_ADDR);
+    } else if (strcmp(line, &quot;reset&quot;) == 0) {
+        Param_Reset(&amp;g_param);
+        BSP_UartPrintf(&quot;default restored (RAM only, send save to persist)\r\n&quot;);
+    } else if (sscanf(line, &quot;set int %lu&quot;, &amp;v) == 1 &amp;&amp; v &gt;= 100UL &amp;&amp; v &lt;= 60000UL) {
+        g_param.sample_ms = (uint32_t)v;
+        BSP_UartPrintf(&quot;sample=%lums (send save)\r\n&quot;, v);
+    } else if (sscanf(line, &quot;set th %lu&quot;, &amp;v) == 1 &amp;&amp; v &lt;= 3300UL) {
+        g_param.alarm_mv = (uint16_t)v;
+        BSP_UartPrintf(&quot;alarm=%lumV (send save)\r\n&quot;, v);
+    } else {
+        BSP_UartPrintf(&quot;bad cmd\r\n&quot;);
+    }
+}
+
+void App_TaskSensor(void)
+{
+    if ((HAL_GetTick() - s_last_sample_ms) &lt; g_param.sample_ms) {
+        return;
+    }
+    s_last_sample_ms = HAL_GetTick();
+    s_last_mv = BSP_AdcReadMv();
+}
+
+void App_TaskDisplay(void)
+{
+    if ((HAL_GetTick() - s_last_print_ms) &lt; 1000U) {
+        return;
+    }
+    s_last_print_ms = HAL_GetTick();
+    BSP_UartPrintf(&quot;mv=%u th=%u %s\r\n&quot;, (unsigned)s_last_mv, (unsigned)g_param.alarm_mv,
+                   (s_last_mv &gt;= g_param.alarm_mv) ? &quot;ALARM&quot; : &quot;ok&quot;);
+}
+
+void App_TaskPower(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    /* 采样是内部节奏，不算&quot;活动&quot;；只要 5 秒没有串口命令就进 Stop */
+    if ((now - s_last_cmd_ms) &lt; 5000U) {
+        return;
+    }
+
+    BSP_UartPrintf(&quot;enter STOP, press KEY1 to wake\r\n&quot;);
+    HAL_Delay(20);                    /* 等最后一行发完再关时钟 */
+    BSP_PowerEnterStopOnce();         /* 内部会先喂狗；LSI 的狗在 Stop 里仍在跑 */
+
+    s_last_cmd_ms = s_last_sample_ms = s_last_print_ms = HAL_GetTick();
+    BSP_UartPrintf(&quot;wake up, sysclk=72MHz\r\n&quot;);
+}
+</code></pre>
+<h3>5.5 main.c</h3>
+<p><strong>文件：<code>Core/Src/main.c</code></strong></p>
+<pre><code class="language-c">#include &quot;main.h&quot;
+#include &quot;gpio.h&quot;
+#include &quot;adc.h&quot;
+#include &quot;usart.h&quot;
+#include &quot;iwdg.h&quot;
+#include &quot;bsp_iwdg.h&quot;
+#include &quot;app_main.h&quot;
+
+void SystemClock_Config(void);
+
+int main(void)
+{
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();              /* 含 KEY1=PB0 的 EXTI0，CubeMX 生成 */
+  MX_ADC1_Init();
+  MX_USART1_UART_Init();
+  MX_IWDG_Init();
+
+  BSP_IwdgStart();
+  App_Init();
+
+  while (1)
+  {
+    App_TaskKey();     BSP_IwdgMarkDone(BSP_IWDG_TASK_KEY);
+    App_TaskDisplay(); BSP_IwdgMarkDone(BSP_IWDG_TASK_DISPLAY);
+    App_TaskSensor();  BSP_IwdgMarkDone(BSP_IWDG_TASK_SENSOR);
+
+    BSP_IwdgPoll();
+    App_TaskPower();          /* 不算关键任务，不参与喂狗判据 */
+
+    HAL_Delay(10);
+  }
+}
+
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef osc = {0};
+  RCC_ClkInitTypeDef clk = {0};
+
+  osc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  osc.HSEState       = RCC_HSE_ON;
+  osc.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  osc.HSIState       = RCC_HSI_ON;
+  osc.PLL.PLLState   = RCC_PLL_ON;
+  osc.PLL.PLLSource  = RCC_PLLSOURCE_HSE;
+  osc.PLL.PLLMUL     = RCC_PLL_MUL9;
+  if (HAL_RCC_OscConfig(&amp;osc) != HAL_OK) { Error_Handler(); }
+
+  clk.ClockType      = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                       RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  clk.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
+  clk.AHBCLKDivider  = RCC_SYSCLK_DIV1;
+  clk.APB1CLKDivider = RCC_HCLK_DIV2;
+  clk.APB2CLKDivider = RCC_HCLK_DIV1;
+  if (HAL_RCC_ClockConfig(&amp;clk, FLASH_LATENCY_2) != HAL_OK) { Error_Handler(); }
+}
+
+void Error_Handler(void)
+{
+  __disable_irq();
+  while (1) { }
+}
+</code></pre>
+<h3>5.6 为什么这么组织</h3>
+<p><strong>为什么 main.c 这么薄</strong>：它只负责&quot;上电顺序&quot;——时钟 → 引脚 → 外设 → 看门狗 → App → 循环。业务（命令、参数、采样节奏）全在 <code>App/app_main.c</code>，硬件细节全在 <code>Hardware/</code>。想换一块板，只改 <code>Hardware/</code> 和引脚宏，<code>main.c</code> 不动。</p>
+<p><strong>为什么 Stop 的判断放在 App 而不是 <code>bsp_power.c</code></strong>：<code>bsp_power</code> 只回答&quot;怎么睡、怎么醒&quot;，&quot;现在能不能睡&quot;是业务策略（有没有命令、有没有采样），只能 App 知道。混在一起，换一个产品就要改驱动。</p>
+<p><strong>为什么看门狗用&quot;三任务标志&quot;而不是简单刷新</strong>：<code>App_TaskKey</code>/<code>Display</code>/<code>Sensor</code> 任意一个卡住（比如串口阻塞、ADC 死等），标志就凑不齐，狗不喂、2 秒后复位。这比&quot;主循环随便喂一下&quot;多一层保护。</p>
+<p><strong>为什么不用别的方案</strong>：不用 WWDG（由 PCLK1 驱动，Stop 后时钟停，且要算窗口）；不用 <code>HAL_Delay</code> 里顺手喂（阻塞任务就永远喂不到）；不在 <code>HAL_UART_RxCpltCallback</code> 里喂（中断还活着不代表主循环活着）。</p>
+<p><strong>哪些没写、默认值是多少</strong>：<code>gpio.c</code>/<code>adc.c</code>/<code>usart.c</code> 全是 CubeMX 生成——KEY1 配成 <code>GPIO_MODE_IT_FALLING</code>、上拉，NVIC 优先级默认 4；ADC1_IN0 独立模式、12 位、采样时间 55.5 周期；USART1 115200-8-N-1、开启 RXNE 中断。这些默认值直接影响行为：EXTI 忘了配就无法从 Stop 唤醒；USART1 没开中断就收不到命令。启动文件、链接脚本、<code>Drivers/</code> 也不用手写。</p>
+<p><strong>做验收 4/5 之前</strong>：IWDG 在 Stop 里仍在计数，2 秒内不按键就会被复位。要么用 STM32CubeProgrammer 把选项字节 <code>IWDG_STOP</code> 置 1（Stop 时冻结看门狗，重新上电生效），要么把 CubeMX 里的重装值改成 5000（8 秒）留出按键时间。两种做法都改配置，不改业务代码。</p>
+</section>
+<hr>
+<h2 id="sec-6">6. 本课小结</h2>
+<ul>
+<li>看门狗 = <strong>独立倒计时器</strong>，到点复位；IWDG 用 LSI 40kHz，<strong>误差 ±50%</strong>。</li>
+<li>超时 = <code>预分频 × 重装值 / 40000</code>；喂狗周期不超过理论值的 <strong>1/2</strong>。</li>
+<li><strong>喂狗必须在主循环</strong>，放在中断里等于没开看门狗；调试时要 <code>__HAL_DBGMCU_FREEZE_IWDG()</code>。</li>
+<li>三种低功耗：<strong>Sleep</strong>（任意中断唤醒）、<strong>Stop</strong>（EXTI 唤醒，要停 SysTick、醒后重配时钟）、<strong>Standby</strong>（醒来等于复位）。</li>
+<li><strong>IWDG 在 Stop 里还在计数</strong>，长时间 Stop 要么改 <code>IWDG_STOP</code> 选项位，要么分段唤醒喂狗。</li>
+<li>内部 Flash：<code>0x08000000</code> 起，<strong>64KB / 1KB 一页 / 半字写入 / 擦除变 0xFF</strong>。</li>
+<li>参数页放<strong>最后一页 0x0800FC00</strong>，擦错页会毁掉程序。</li>
+<li>写入四步：<strong>解锁 → 擦页 → 按半字写 → 上锁</strong>；未擦除直接写会得到按位与的乱码。</li>
+<li>写一半断电要用 <strong>magic + CRC / 双备份</strong>兜底。</li>
+</ul>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能由 LSI 和分频算出 IWDG 超时，并说明为什么要留一倍余量</li>
+<li><input disabled="" type="checkbox"> 我能解释&quot;喂狗放中断里&quot;为什么是假看门狗</li>
+<li><input disabled="" type="checkbox"> 我能说出三种低功耗模式的电流量级和唤醒源</li>
+<li><input disabled="" type="checkbox"> 我知道 Stop 模式必须停 SysTick、唤醒后要重配时钟</li>
+<li><input disabled="" type="checkbox"> 我知道 IWDG 在 Stop 里仍在跑，以及三种应对办法</li>
+<li><input disabled="" type="checkbox"> 我能算出参数页地址并说明为什么不能放程序区</li>
+<li><input disabled="" type="checkbox"> 我能默写 Flash 擦写的四步流程</li>
+<li><input disabled="" type="checkbox"> 我能说出&quot;没解锁 / 没擦除 / 不对齐 / 写一半断电&quot;各自的现象</li>
+</ul>
+</section>
+<hr>
+<h2 id="sec-7">7. 下一课预告</h2>
+<p>到这里，<strong>裸机（不带操作系统）的能力已经完整了</strong>：GPIO、中断、定时器、通信、采集、存储、可靠性。</p>
+<p>但裸机有个天花板：任务一多，&quot;谁先跑、跑多久&quot;全靠你自己排，一个慢任务会拖死所有任务。</p>
+<p>下一课 <code>s17 FreeRTOS 入门</code>：引入操作系统，让多个任务&quot;看起来同时在跑&quot;，用队列传数据、用信号量同步。这是嵌入式岗位的分水岭。</p>
+
+  
+<nav class="pager">
+  <a class="prev" href="15-adc-dma.html">← ADC 采样与 DMA 搬运</a>
+  <a class="next" href="17-freertos.html">FreeRTOS 入门：任务、队列与信号量 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

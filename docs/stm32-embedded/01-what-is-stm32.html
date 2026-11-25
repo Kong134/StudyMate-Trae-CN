@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>认识这块蓝板：STM32F103C8T6 与最小系统 · STM32 嵌入式开发</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">STM32 嵌入式开发</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">concept</span>
+    <span class="badge ghost">60 分钟</span>
+    <span class="badge done">已完成</span>
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 你手里拿到的到底是什么</a></li><li><a href="#sec-2">2. 型号 STM32F103C8T6 是怎么命名的</a></li><li><a href="#sec-3">3. 芯片内部：内核不等于外设</a></li><li><a href="#sec-4">4. 最小系统：让芯片能跑起来的最低配置</a></li><li><a href="#sec-5">5. 程序存在哪：一张存储地图</a></li><li><a href="#sec-6">6. 程序是怎么进芯片的</a></li><li><a href="#sec-7">7. 拿到板子第一件事：三项检查</a></li><li><a href="#sec-8">8. 这一课的动手项目</a></li><li><a href="#sec-9">附：PPT 原图对照</a></li><li><a href="#sec-10">9. 本课小结</a></li></ol></nav>
+  <h2 id="sec-0">这一课要解决的问题</h2>
+
+<section class="callout goal"><h3 class="callout-title">本课目标</h3><p>读完你能做到四件事：拆读一个 STM32 型号的每一位；说清最小系统由哪几部分组成；在一张存储地图上指出&quot;代码、变量、外设&quot;分别在哪；知道程序是通过哪两根线写进芯片的。</p>
+</section>
+<p>下面这些问题，都是新手第一周最容易卡住的地方：</p>
+<ul>
+<li>板子插上 USB，电脑为什么什么反应都没有？</li>
+<li>为什么非要一个叫 ST-Link 的小东西？</li>
+<li>BOOT0 那个跳线到底在干吗，接错了会怎样？</li>
+<li>教程里说&quot;F103 有 DAC&quot;，我这块为什么没有？</li>
+</ul>
+<p>这一课不写代码，但把这块板讲透，后面所有课都能省一半时间。</p>
+<hr>
+<h2 id="sec-1">1. 你手里拿到的到底是什么</h2>
+<p>把蓝板放在桌上，你看到的是：一块黑色方形芯片、两根各 20 针的排针、一个 USB 口、一个复位按键、两个小金属壳（晶振）、一个 2×3 的跳线帽。</p>
+<p>把它和 Arduino 对比一下就能理解差别：</p>
+<ul>
+<li><strong>Arduino</strong> 像一个装好系统的整机：插上 USB 就能烧程序，因为它板上多了一颗&quot;USB 转串口&quot;芯片，出厂还带了 bootloader。</li>
+<li><strong>STM32 蓝板</strong> 像只买了主板和 CPU 的电脑：芯片本身很能打（72MHz、几十个外设），但<strong>没有任何东西帮你把程序送进去</strong>，也没有出厂程序。USB 口是直接连到芯片的 PA11/PA12 的，只有你自己写了 USB 代码，它才会被电脑认出来。</li>
+</ul>
+
+<section class="callout key"><h3 class="callout-title">关键结论</h3><p><strong>一句话</strong>：蓝板 = STM32F103C8T6 芯片 + 让它&quot;能通电跑起来&quot;的最小外围电路。它不是一个成品开发板，是一个需要你自己下载程序的&quot;裸机&quot;。</p>
+</section>
+<p>所以第一件要买的东西不是别的，是 <strong>ST-Link V2</strong>（十几块钱的克隆版就够）。它负责把你电脑里的程序写进芯片，还能让你在芯片运行时看变量——这个能力叫<strong>在线调试</strong>，是后面排查问题的命根子。</p>
+<hr>
+<h2 id="sec-2">2. 型号 <code>STM32F103C8T6</code> 是怎么命名的</h2>
+<p>这串字符不是随便编的，每一位都有含义。学会拆读，你就能一眼看出别人的板子和你的差在哪。</p>
+<table>
+<thead>
+<tr>
+<th>段</th>
+<th>本例</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>STM32</td>
+<td>STM32</td>
+<td>ST 公司的 32 位 MCU 家族</td>
+</tr>
+<tr>
+<td>F</td>
+<td>f</td>
+<td>产品类型：<strong>F = 通用型</strong>（L=低功耗，H=高性能，G=主流）</td>
+</tr>
+<tr>
+<td>103</td>
+<td>103</td>
+<td>子系列，103 就是那批 Cortex-M3 的基础型号</td>
+</tr>
+<tr>
+<td>C</td>
+<td>c</td>
+<td><strong>引脚数：C = 48 脚</strong>（T=36，R=64，V=100，Z=144，I=176）</td>
+</tr>
+<tr>
+<td>8</td>
+<td>8</td>
+<td><strong>Flash 容量：8 = 64KB</strong>（4=16K，6=32K，B=128K，C=256K，E=512K）</td>
+</tr>
+<tr>
+<td>T</td>
+<td>t</td>
+<td><strong>封装：T = LQFP</strong>（方形四边出脚）</td>
+</tr>
+<tr>
+<td>6</td>
+<td>6</td>
+<td><strong>温度等级：6 = -40 ~ 85℃ 工业级</strong>（7 = -40 ~ 105℃）</td>
+</tr>
+</tbody></table>
+
+<section class="callout warn"><h3 class="callout-title">注意</h3><p>注意两个<strong>不在型号里但很关键</strong>的信息：SRAM 是 <strong>20KB</strong>，封装是 <strong>LQFP48（7×7mm）</strong>。这两条在你的数据手册第一页就能查到，后面写代码时随时会被它们限制。</p>
+</section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：解码型号</h3><p><code>STM32F103RBT6</code> 这块芯片是多少引脚、多大 Flash、什么封装、什么温度范围？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><ul>
+<li><strong>R</strong> → 64 脚</li>
+<li><strong>B</strong> → 128KB Flash</li>
+<li><strong>T</strong> → LQFP 封装</li>
+<li><strong>6</strong> → -40 ~ 85℃</li>
+</ul>
+<p>所以它是 64 脚的 F103，Flash 比你的 C8T6 大一倍。这类&quot;同系列换容量&quot;的芯片，外设几乎一样，教程可以通用。</p>
+</div></details></section>
+<hr>
+<h2 id="sec-3">3. 芯片内部：内核不等于外设</h2>
+<p>很多人把&quot;STM32&quot;和&quot;ARM&quot;混着说，其实这是两件事：</p>
+<ul>
+<li><strong>Cortex-M3 是内核</strong>：ARM 公司设计的&quot;大脑&quot;，负责取指令、执行运算、处理中断。它只懂运算和访问地址，不知道什么叫串口。</li>
+<li><strong>STM32 是芯片</strong>：ST 公司在 Cortex-M3 周围加了 Flash、SRAM、和各种外设（GPIO、串口、定时器、ADC），再用总线把它们连起来。</li>
+</ul>
+<p>用类比说：Cortex-M3 是发动机，STM32 是整辆车。你写代码时感觉在&quot;操作 STM32&quot;，实际上一部分指令进了内核，另一部分是在给外设的寄存器写值。</p>
+<p>C8T6 这一颗的具体家当（这些都是数据手册里能查到的硬指标）：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>参数</th>
+<th>对你的实际影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>内核</td>
+<td>Cortex-M3，最高 72MHz</td>
+<td>一条指令约十几纳秒，够做绝大多数控制</td>
+</tr>
+<tr>
+<td>Flash</td>
+<td>64KB</td>
+<td>放代码 + 常量。HAL 库本身要占十几 KB，别乱加功能</td>
+</tr>
+<tr>
+<td>SRAM</td>
+<td>20KB</td>
+<td>放变量、数组、栈。一个大 buffer 就能撑爆</td>
+</tr>
+<tr>
+<td>GPIO</td>
+<td>37 个</td>
+<td>排针能引出大部分，但不是全部</td>
+</tr>
+<tr>
+<td>串口</td>
+<td>3 个 USART</td>
+<td>USART1 在 PA9/PA10，最常用于接电脑</td>
+</tr>
+<tr>
+<td>SPI / I²C</td>
+<td>2 个 / 2 个</td>
+<td>接屏幕、Flash、传感器</td>
+</tr>
+<tr>
+<td>CAN / USB</td>
+<td>各有 1 个</td>
+<td>蓝板 USB 口直连 PA11/PA12</td>
+</tr>
+<tr>
+<td>ADC</td>
+<td>2 个 12 位，共 10 通道</td>
+<td>测电压、读模拟传感器</td>
+</tr>
+<tr>
+<td>定时器</td>
+<td>TIM1 高级 + TIM2/3/4 通用 + TIM6/7 基本</td>
+<td>PWM、测频率、做时基全靠它们</td>
+</tr>
+</tbody></table>
+
+<section class="callout warn"><h3 class="callout-title">注意</h3><p><strong>C8T6 没有 DAC</strong>。DAC（数字转模拟输出）只在 F103 的&quot;大容量&quot;型号上有。你在网上看到&quot;用 F103 的 DAC 输出正弦波&quot;的教程，那是 ZET6/ VET6 那类板子，别照抄。同理，C8T6 也没有 FSMC（接并口屏）和 SDIO。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">深入一步</h3><p>为什么特别强调&quot;没有&quot;？因为嵌入式学习里最贵的错误不是不会写代码，而是<strong>照着别人板子的教程，在自己不兼容的板子上折腾三天</strong>。先知道自己的边界，比多学一个外设重要。</p>
+</section>
+<hr>
+<h2 id="sec-4">4. 最小系统：让芯片能跑起来的最低配置</h2>
+<p>芯片不是插上电就能工作的。它需要五个条件同时满足，这五个加起来叫<strong>最小系统</strong>。</p>
+<svg class="diagram" viewBox="0 0 920 380" xmlns="http://www.w3.org/2000/svg">
+  <rect class="box" x="20" y="16" width="312" height="348" rx="12"/>
+  <text class="sub" x="38" y="42" font-size="12">最小系统：芯片能跑起来的最低配置</text>
+
+  <rect class="box" x="38" y="56" width="276" height="46" rx="8"/>
+  <text class="label" x="52" y="76" font-size="13">电源 3.3V</text>
+  <text class="sub" x="52" y="92" font-size="11">VDD / VDDA，每脚配 100nF 去耦</text>
+
+  <rect class="box" x="38" y="112" width="276" height="46" rx="8"/>
+  <text class="label" x="52" y="132" font-size="13">高速时钟 HSE 8MHz</text>
+  <text class="sub" x="52" y="148" font-size="11">外部晶振 + 两个 20pF 负载电容</text>
+
+  <rect class="box" x="38" y="168" width="276" height="46" rx="8"/>
+  <text class="label" x="52" y="188" font-size="13">低速时钟 LSE 32.768kHz</text>
+  <text class="sub" x="52" y="204" font-size="11">给 RTC 用，不做实时时钟可以不接</text>
+
+  <rect class="box" x="38" y="224" width="276" height="46" rx="8"/>
+  <text class="label" x="52" y="244" font-size="13">复位 NRST</text>
+  <text class="sub" x="52" y="260" font-size="11">低电平复位，常态由上拉电阻保持高</text>
+
+  <rect class="box" x="38" y="280" width="276" height="46" rx="8"/>
+  <text class="label" x="52" y="300" font-size="13">启动模式 BOOT0 / BOOT1</text>
+  <text class="sub" x="52" y="316" font-size="11">决定从 Flash 还是从串口 bootloader 启动</text>
+
+  <line class="arrow" x1="334" y1="190" x2="424" y2="190"/>
+  <polygon class="arrowhead" points="424,186 434,190 424,194"/>
+
+  <rect class="box acc" x="438" y="16" width="300" height="348" rx="12"/>
+  <text class="label" x="458" y="44" font-size="14">STM32F103C8T6</text>
+  <text class="sub" x="458" y="62" font-size="11">LQFP48 · Cortex-M3 @72MHz</text>
+
+  <rect class="box" x="458" y="76" width="260" height="44" rx="8"/>
+  <text class="label" x="472" y="95" font-size="12">Cortex-M3 内核</text>
+  <text class="sub" x="472" y="111" font-size="10.5">ARM 设计的"大脑"，只管运算与中断</text>
+
+  <rect class="box" x="458" y="128" width="260" height="44" rx="8"/>
+  <text class="label" x="472" y="147" font-size="12">Flash 64KB</text>
+  <text class="sub" x="472" y="163" font-size="10.5">从 0x0800_0000 起，放代码与常量</text>
+
+  <rect class="box" x="458" y="180" width="260" height="44" rx="8"/>
+  <text class="label" x="472" y="199" font-size="12">SRAM 20KB</text>
+  <text class="sub" x="472" y="215" font-size="10.5">从 0x2000_0000 起，放变量与栈</text>
+
+  <rect class="box" x="458" y="232" width="260" height="44" rx="8"/>
+  <text class="label" x="472" y="251" font-size="12">外设：GPIO / USART / I²C / SPI / ADC / TIM</text>
+  <text class="sub" x="472" y="267" font-size="10.5">挂在 APB1、APB2、AHB 总线上</text>
+
+  <rect class="box" x="458" y="284" width="260" height="44" rx="8"/>
+  <text class="label" x="472" y="303" font-size="12">SWD 调试口</text>
+  <text class="sub" x="472" y="319" font-size="10.5">PA13 = SWDIO，PA14 = SWCLK</text>
+
+  <line class="arrow" x1="740" y1="190" x2="752" y2="190"/>
+  <polygon class="arrowhead" points="752,186 762,190 752,194"/>
+
+  <rect class="box" x="766" y="140" width="140" height="100" rx="8"/>
+  <text class="label" x="782" y="168" font-size="12">40 pin 排针</text>
+  <text class="sub" x="782" y="188" font-size="10.5">把 GPIO 引到</text>
+  <text class="sub" x="782" y="204" font-size="10.5">面包板 / 传感器</text>
+</svg>
+
+<p>一条一条说清楚，以及<strong>配错了会看到什么</strong>：</p>
+<p><strong>电源 3.3V</strong> —— 芯片的工作电压是 2.0~3.6V，典型 3.3V。所有 GPIO 输出高电平也只有 3.3V，<strong>不是 5V</strong>。蓝板上的 &quot;5V&quot; 引脚来自 USB 的 VBUS，只是给你往外供电用的，不要把 5V 信号直接接到 GPIO。</p>
+<p><strong>两个晶振</strong> —— 8MHz 那个是主时钟源头（叫 HSE），后面要靠它倍频到 72MHz；32.768kHz 那个只服务 RTC 实时时钟。两个都靠&quot;石英晶振 + 两个负载电容&quot;起振。</p>
+<p><strong>复位</strong> —— NRST 引脚平时被电阻拉到高电平，你一按复位键把它拉低，芯片就从头开始执行。蓝板上那个小按键就是干这个的。</p>
+<p><strong>启动模式</strong> —— 两个 BOOT 引脚决定芯片复位后从哪里取第一条指令：</p>
+<table>
+<thead>
+<tr>
+<th>BOOT0</th>
+<th>BOOT1</th>
+<th>从哪启动</th>
+<th>用来干什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>×</td>
+<td>主 Flash（0x0800_0000）</td>
+<td><strong>正常运行你写的程序</strong>（平时就接这个）</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>系统存储器（出厂 bootloader）</td>
+<td>用串口 USART1 下载程序，ST-Link 坏了的备用招</td>
+</tr>
+<tr>
+<td>1</td>
+<td>1</td>
+<td>内置 SRAM</td>
+<td>调试用，几乎没人用</td>
+</tr>
+</tbody></table>
+
+<section class="callout warn"><h3 class="callout-title">注意</h3><p>蓝板上电后没反应，<strong>第一个要检查的就是 BOOT0 跳线</strong>。如果它被插在 1 那边，你烧进去的程序根本不会执行，现象是&quot;烧写成功但灯不亮&quot;。这个坑几乎每个新手都会踩一次。</p>
+</section>
+<hr>
+<h2 id="sec-5">5. 程序存在哪：一张存储地图</h2>
+<p>这是本课最值钱的一张表。以后所有&quot;为什么变量会丢&quot;&quot;为什么栈溢出&quot;的问题，都能在这张表上解释。</p>
+<table>
+<thead>
+<tr>
+<th>起始地址</th>
+<th>区域</th>
+<th>大小（C8T6）</th>
+<th>里面放什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>0x0800_0000</code></td>
+<td>Flash</td>
+<td>64KB（到 <code>0x0800_FFFF</code>）</td>
+<td>你写的代码、常量字符串、初始化的全局变量初值</td>
+</tr>
+<tr>
+<td><code>0x2000_0000</code></td>
+<td>SRAM</td>
+<td>20KB（到 <code>0x2000_4FFF</code>）</td>
+<td>全局变量、局部变量、数组、栈（stack）</td>
+</tr>
+<tr>
+<td><code>0x4000_0000</code></td>
+<td>外设寄存器</td>
+<td>—</td>
+<td>GPIO、串口、定时器的控制寄存器都映射到这里</td>
+</tr>
+<tr>
+<td><code>0xE000_0000</code></td>
+<td>内核私有</td>
+<td>—</td>
+<td>NVIC（中断控制器）、SysTick 定时器</td>
+</tr>
+</tbody></table>
+<p>几个马上能用上的推论：</p>
+<ul>
+<li><strong>掉电就丢的是 SRAM</strong>，Flash 里的东西断电不丢，所以配置参数要存 Flash 而不是普通变量。</li>
+<li><strong><code>0x2000_0000</code> 往上是 20KB</strong>，你定义一个 <code>float buf[6000]</code> 就是 24KB，编译能过但链接会报 <code>region RAM overflowed</code>，因为根本放不下。</li>
+<li><strong>外设也是&quot;地址&quot;</strong>：你在代码里写 <code>GPIOA-&gt;ODR = 0x2000</code>，本质上是在往 <code>0x4002_080C</code> 这个地址写值。HAL 库只是替你在做这件事。</li>
+</ul>
+
+<section class="callout key"><h3 class="callout-title">关键结论</h3><p><strong>把外设看成&quot;内存地址&quot;</strong>，是从&quot;会用库&quot;到&quot;懂单片机&quot;的分水岭，也是面试里&quot;寄存器映射&quot;这类问题的标准答案。</p>
+</section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：算地址和容量</h3><p>(1) C8T6 的 Flash 64KB，末地址是多少？(2) SRAM 20KB，末地址是多少？(3) 下面两个定义哪个会导致链接失败：<code>int a[100]</code> 还是 <code>float b[6000]</code>？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>(1) <code>0x0800_0000 + 0x1_0000 - 1 = 0x0800_FFFF</code>（64KB = 0x10000 字节）
+(2) <code>0x2000_0000 + 0x5000 - 1 = 0x2000_4FFF</code>（20KB = 0x5000 字节）
+(3) <code>int a[100]</code> = 400 字节，没问题；<code>float b[6000]</code> = 6000×4 = 24000 字节 ≈ 23.4KB，超过 20KB SRAM，链接阶段会报 RAM 溢出。注意它<strong>编译能通过</strong>，是链接才知道放不下——这也是面试常问的&quot;编译错误和链接错误的区别&quot;的一个实例。</p>
+</div></details></section>
+<hr>
+<h2 id="sec-6">6. 程序是怎么进芯片的</h2>
+<p>这条链路要背下来，因为出问题时你要按顺序排查：</p>
+<svg class="diagram" viewBox="0 0 880 190" xmlns="http://www.w3.org/2000/svg">
+  <rect class="box" x="16" y="48" width="150" height="60" rx="8"/>
+  <text class="label" x="30" y="74" font-size="12">电脑 · CubeIDE</text>
+  <text class="sub" x="30" y="92" font-size="10.5">编译出 .elf / .bin</text>
+
+  <line class="arrow" x1="166" y1="78" x2="200" y2="78"/>
+  <polygon class="arrowhead" points="200,74 210,78 200,82"/>
+  <text class="sub" x="168" y="128" font-size="10.5">USB</text>
+
+  <rect class="box" x="211" y="48" width="126" height="60" rx="8"/>
+  <text class="label" x="225" y="74" font-size="12">ST-Link V2</text>
+  <text class="sub" x="225" y="92" font-size="10.5">USB 转 SWD</text>
+
+  <line class="arrow" x1="337" y1="78" x2="371" y2="78"/>
+  <polygon class="arrowhead" points="371,74 381,78 371,82"/>
+  <text class="sub" x="316" y="128" font-size="10.5">SWD：SWDIO / SWCLK / GND / 3V3</text>
+
+  <rect class="box acc" x="382" y="48" width="200" height="60" rx="8"/>
+  <text class="label" x="396" y="74" font-size="12">STM32 内部 Flash</text>
+  <text class="sub" x="396" y="92" font-size="10.5">写入 0x0800_0000 起</text>
+
+  <line class="arrow" x1="582" y1="78" x2="616" y2="78"/>
+  <polygon class="arrowhead" points="616,74 626,78 616,82"/>
+  <text class="sub" x="566" y="128" font-size="10.5">复位</text>
+
+  <rect class="box" x="627" y="48" width="180" height="60" rx="8"/>
+  <text class="label" x="641" y="74" font-size="12">从上电处开始运行</text>
+  <text class="sub" x="641" y="92" font-size="10.5">先查中断向量表，再进 main()</text>
+
+  <path class="loop" d="M 717 108 L 717 152 L 91 152 L 91 108"/>
+  <text class="sub" x="300" y="172" font-size="10.5">改代码 → 重新编译 → 重新下载</text>
+</svg>
+
+<p>关键点：</p>
+<ul>
+<li><strong>SWD 只要两根信号线</strong>：SWDIO（PA13）和 SWCLK（PA14），再加 GND 和 3.3V 供电，一共四根。这就是为什么 ST-Link 那 4 个孔就能干活。</li>
+<li><strong>芯片每次复位，从 Flash 开头取指令</strong>。Flash 的第一个位置放的不是代码，是<strong>中断向量表</strong>（一张&quot;出事了该跳哪&quot;的地址清单），所以它必须固定放在最前面。</li>
+<li><strong>下载成功 ≠ 会运行</strong>：还有 BOOT0 跳线、复位、供电三关。</li>
+</ul>
+
+<section class="callout example"><h3 class="callout-title">例子：烧写成功但灯不亮，怎么按顺序查</h3><ol>
+<li>BOOT0 是不是接到 0？（最常见）</li>
+<li>按一下复位键，是不是跑飞了？</li>
+<li>ST-Link 的 3.3V 有没有真的接到板子？（只接 GND 和 SWD 两根也能&quot;识别&quot;芯片，但供电不足会行为异常）</li>
+<li>LED 是不是接在 PC13 而且<strong>低电平才亮</strong>？（写 1 反而熄灭）</li>
+</ol>
+</section>
+<hr>
+<h2 id="sec-7">7. 拿到板子第一件事：三项检查</h2>
+<p>在写第一行代码之前先做这三件事，能避免 90% 的&quot;板子是不是坏了&quot;：</p>
+<ol>
+<li><strong>目测跳线</strong>：BOOT0 跳到 0 那边（靠近板子边缘的位置通常标着 0）。</li>
+<li><strong>断电测短路</strong>：万用表蜂鸣档，量 3V3 与 GND 之间<strong>不应该导通</strong>。导通说明板子或你的接线短路了，别上电。</li>
+<li><strong>上电测电压</strong>：用 ST-Link 的 3.3V 供电（或 USB），量 3V3 引脚对 GND 应该读到约 3.3V。</li>
+</ol>
+
+<section class="callout warn"><h3 class="callout-title">注意</h3><p><strong>永远不要</strong>用 5V 去喂 3.3V 引脚，也不要把 5V 传感器的输出直接接 GPIO。5V 会顺着 IO 内部的保护二极管倒灌进 3.3V 电源网络，轻则读数异常，重则烧片。</p>
+</section>
+<hr>
+<h2 id="sec-8">8. 这一课的动手项目</h2>
+
+<section class="callout project"><h3 class="callout-title">动手项目</h3><p><strong>给这块板画一张&quot;个人引脚地图&quot;</strong></p>
+<p>拿一张纸（或在 <code>notes/s1.md</code> 里），画出蓝板两侧共 40 个排针，然后凭本课内容标出下面这些关键脚，标不出来的回去查数据手册：</p>
+<ul>
+<li>供电：<code>3V3</code>、<code>GND</code>、<code>5V</code></li>
+<li>调试下载：<code>SWDIO(PA13)</code>、<code>SWCLK(PA14)</code>、<code>NRST</code></li>
+<li>启动：<code>BOOT0</code>、<code>BOOT1(PB2)</code></li>
+<li>板载资源：<code>PC13</code>（LED，低电平点亮）</li>
+<li>通信：<code>PA9(TX)</code>、<code>PA10(RX)</code>、<code>PA11(USB D-)</code>、<code>PA12(USB D+)</code></li>
+</ul>
+<p><strong>验收标准</strong>：合上资料，能指着板子说出&quot;下载用哪两根、供电用哪两个、为什么 PC13 写 0 才亮&quot;。做到这一条，下一课接 ST-Link 时你不会接错线。</p>
+</section>
+<hr>
+<h2 id="sec-9">附：PPT 原图对照</h2>
+<p><img src="../assets/ppt/009.png" alt="PPT · 命名规则"></p>
+<p><em>PPT 第 9 页：型号命名规则。对照正文第 2 节逐位解码，图上把&quot;系列/引脚数/容量/封装/温度&quot;几段都标出来了。</em></p>
+<p><img src="../assets/ppt/011.png" alt="PPT · 引脚定义"></p>
+<p><em>PPT 第 11 页：引脚定义表。注意标着 <strong>FT</strong> 的脚是 5V 容忍；标着 ADC/TIM 的是复用功能，后面的课会用到。</em></p>
+<p><img src="../assets/ppt/013.png" alt="PPT · 最小系统电路"></p>
+<p><em>PPT 第 13 页：最小系统电路。正文第 4 节讲&quot;缺一个会怎样&quot;，这一页把几个部分画在了一起，可以对照检查自己的板子。</em></p>
+<h2 id="sec-10">9. 本课小结</h2>
+<ul>
+<li>蓝板是&quot;裸机&quot;，没有 USB 转串口芯片也没有出厂程序，必须用 ST-Link 通过 SWD 下载。</li>
+<li>型号每一位都有含义：<code>C</code>=48 脚、<code>8</code>=64KB Flash、<code>T</code>=LQFP、<code>6</code>=工业级。</li>
+<li>C8T6 是 Cortex-M3 @72MHz、64KB Flash、20KB SRAM、37 个 GPIO，<strong>没有 DAC</strong>。</li>
+<li>最小系统 = 电源 + 时钟 + 复位 + 启动模式（+ SWD）。</li>
+<li>存储地图：Flash 在 <code>0x0800_0000</code>，SRAM 在 <code>0x2000_0000</code>，外设寄存器在 <code>0x4000_0000</code>。</li>
+<li>出问题先查三样：BOOT0 跳线、供电、复位。</li>
+</ul>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能不看资料说出 <code>STM32F103C8T6</code> 中每一位的含义</li>
+<li><input disabled="" type="checkbox"> 我能说出最小系统的五个组成部分</li>
+<li><input disabled="" type="checkbox"> 我能说出 Flash 和 SRAM 的起始地址和大小</li>
+<li><input disabled="" type="checkbox"> 我知道 SWD 用的是哪两个引脚</li>
+<li><input disabled="" type="checkbox"> 我知道 BOOT0=1、BOOT1=0 时芯片会干什么</li>
+<li><input disabled="" type="checkbox"> 我知道为什么 5V 不能直接接 GPIO</li>
+</ul>
+</section>
+<hr>
+<p><strong>下一课预告</strong>：<code>s2 第一个工程：CubeIDE + ST-Link 点灯与在线调试</code>。你会亲手建出第一个工程、把程序烧进这块板、让 PC13 的灯闪起来，并学会用断点看变量——那是后面所有排查的起点。</p>
+
+  
+<nav class="pager">
+  <span></span>
+  <a class="next" href="02-first-project.html">第一个工程：CubeIDE + ST-Link 点灯与在线调试 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

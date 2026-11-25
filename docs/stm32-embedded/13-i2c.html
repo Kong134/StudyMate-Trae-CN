@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>I2C 总线：开漏、时序与 OLED 显示 · STM32 嵌入式开发</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">STM32 嵌入式开发</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">practice</span>
+    <span class="badge ghost">90 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 为什么必须是开漏：回到 s3 的&amp;quot;两个开关&amp;quot;</a></li><li><a href="#sec-2">2. 三个必须认得的时序</a></li><li><a href="#sec-3">3. 地址：7 位地址 + 1 位读写</a></li><li><a href="#sec-4">4. 一次写操作长什么样</a></li><li><a href="#sec-5">5. OLED：I2C 上最常见的负载</a></li><li><a href="#sec-6">6. 软件 I2C 的核心就是四行</a></li><li><a href="#sec-7">7. 算一算</a></li><li><a href="#sec-8">8. 动手项目</a></li><li><a href="#sec-9">9. 本课小结</a></li><li><a href="#sec-10">10. 下一课预告</a></li></ol></nav>
+  <h2 id="sec-0">这一课要解决的问题</h2>
+
+<section class="callout goal"><h3 class="callout-title">本课目标</h3><p>读完你能：说清 I2C 为什么必须用开漏加外部上拉；看懂起始、应答、停止三个关键时序；自己拼出&quot;设备地址 + 寄存器地址 + 数据&quot;的写序列；用 I2C 驱动一块 0.96 寸 OLED 显示数字；知道软件 I2C 和硬件 I2C 什么时候各用哪个。</p>
+</section>
+<p>串口是&quot;一根线对一个设备&quot;。现实里更常见的是<strong>一根线挂好几个芯片</strong>——一个温湿度传感器、一个 OLED、一个 EEPROM，全接在同样的两根线上。这就是 I2C。</p>
+<p>它只有两根线：</p>
+<ul>
+<li><strong>SCL</strong>：时钟线，由主机产生</li>
+<li><strong>SDA</strong>：数据线，双向</li>
+</ul>
+<hr>
+<h2 id="sec-1">1. 为什么必须是开漏：回到 s3 的&quot;两个开关&quot;</h2>
+<p>s3 讲过：开漏输出的引脚内部<strong>只有下面那个开关</strong>（接 GND 的 N-MOS），上面没有开关，只能&quot;拉低&quot;或&quot;放手&quot;（高阻）。</p>
+<p>I2C 把这条规则用到了极致：<strong>总线上所有设备的 SDA、SCL 都是开漏，外面各接一个上拉电阻到 3.3V</strong>。</p>
+<p>于是线上电平是&quot;线与&quot;的结果：</p>
+<table>
+<thead>
+<tr>
+<th>设备 A</th>
+<th>设备 B</th>
+<th>线上电平</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>放手</td>
+<td>放手</td>
+<td>上拉电阻拉高 → <strong>1</strong></td>
+</tr>
+<tr>
+<td>拉低</td>
+<td>放手</td>
+<td>被 A 拉低 → <strong>0</strong></td>
+</tr>
+<tr>
+<td>放手</td>
+<td>拉低</td>
+<td>被 B 拉低 → <strong>0</strong></td>
+</tr>
+<tr>
+<td>拉低</td>
+<td>拉低</td>
+<td><strong>0</strong></td>
+</tr>
+</tbody></table>
+
+<section class="callout note"><h3 class="callout-title">如果改成推挽会怎样（这是面试原题）</h3><p>推挽输出上面也有开关，会主动输出高电平（接 3.3V）。</p>
+<p>假设 A 想输出 1（把线接 3.3V），B 想输出 0（把线接 GND）——<strong>3.3V 和 GND 之间通过两个导通的 MOS 管直接短路</strong>。电流只受 MOS 管导通电阻限制，几个安培，芯片当场烧掉。</p>
+<p>开漏的好处正是：<strong>没人会主动输出高电平，所以永远不会&quot;一个送 3.3V、一个送 GND&quot;</strong>。大家只会&quot;拉低&quot;或&quot;不管&quot;，冲突时最坏结果就是都拉低（还是 0），安全。</p>
+<p>这就是 I2C 必须开漏、必须外部上拉的根本原因。上拉电阻不是&quot;可选优化&quot;，是<strong>电路能工作的前提</strong>。</p>
+</section>
+
+<section class="callout warn"><h3 class="callout-title">忘接上拉电阻的现象</h3><p>模块上通常自带 4.7kΩ 上拉（OLED 模块背面一般有），所以很多人没意识到它的存在。但如果自己画板、或者买的是裸芯片：</p>
+<ul>
+<li><strong>完全没上拉</strong>：SDA/SCL 永远是低或浮空，主机发不出起始信号。现象是 <code>HAL_I2C_Master_Transmit</code> 一直返回 <code>HAL_ERROR</code> 或 <code>HAL_TIMEOUT</code>，逻辑分析仪上看不到任何波形跳变。</li>
+<li><strong>上拉太大（100kΩ）</strong>：上升沿变缓，100kHz 下勉强能通，400kHz 下直接失败。示波器上看上升沿是个&quot;斜坡&quot;而不是&quot;台阶&quot;。</li>
+<li><strong>上拉太小（1kΩ）</strong>：电流大、低电平抬不起来（低于 0.4V 的 Vil 要求），也通不了。</li>
+</ul>
+<p><strong>标准值：100kHz 用 4.7kΩ，400kHz 用 2.2kΩ，短线可以用 10kΩ。</strong></p>
+</section>
+<hr>
+<h2 id="sec-2">2. 三个必须认得的时序</h2>
+<p>I2C 没有片选线，靠<strong>起始和停止信号</strong>划分每一次通信。</p>
+<table>
+<thead>
+<tr>
+<th>信号</th>
+<th>SCL</th>
+<th>SDA</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>起始 S</strong></td>
+<td>高</td>
+<td><strong>由高变低</strong></td>
+<td>总线忙，一次通信开始</td>
+</tr>
+<tr>
+<td><strong>停止 P</strong></td>
+<td>高</td>
+<td><strong>由低变高</strong></td>
+<td>总线空闲</td>
+</tr>
+<tr>
+<td><strong>数据位</strong></td>
+<td>高电平期间采样</td>
+<td>只能在 SCL 低电平期间变化</td>
+<td>保证采样时数据稳定</td>
+</tr>
+<tr>
+<td><strong>应答 ACK</strong></td>
+<td>第 9 个时钟</td>
+<td>接收方把 SDA <strong>拉低</strong></td>
+<td>&quot;收到了&quot;</td>
+</tr>
+<tr>
+<td><strong>非应答 NACK</strong></td>
+<td>第 9 个时钟</td>
+<td>接收方放手（SDA 高）</td>
+<td>&quot;没有了/不要了&quot;</td>
+</tr>
+</tbody></table>
+<svg class="diagram" viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg">
+  <text class="label" x="16" y="26" font-size="11.5">SCL：主机打的节拍</text>
+  <path d="M 60 70 L 60 46 L 100 46 L 100 70 L 140 70 L 140 46 L 180 46 L 180 70 L 220 70 L 220 46 L 260 46 L 260 70 L 300 70 L 300 46 L 340 46 L 340 70 L 380 70 L 380 46 L 420 46 L 420 70 L 460 70 L 460 46 L 500 46 L 500 70 L 540 70 L 540 46 L 580 46 L 580 70"
+        stroke="#2c6fbb" stroke-width="2" fill="none"/>
+
+<p>  <text class="label" x="16" y="116" font-size="11.5">SDA：起始 → 7 位地址 + 读写位 → ACK</text>
+  <path d="M 60 160 L 100 160 L 100 136 L 140 136 L 140 160 L 180 160 L 180 136 L 220 136 L 220 160 L 260 160 L 260 136 L 300 136 L 300 160 L 340 160 L 340 136 L 380 136 L 380 160 L 420 160 L 420 136 L 460 136 L 460 160 L 500 160 L 500 136 L 540 136 L 540 160 L 580 160"
+        stroke="#c0392b" stroke-width="2" fill="none"/></p>
+<p>  <text class="sub" x="60" y="188" font-size="9.5">起始：SCL 高时 SDA 下降</text>
+  <text class="sub" x="300" y="188" font-size="9.5">数据只在 SCL 低时变</text>
+  <text class="sub" x="500" y="188" font-size="9.5">ACK：接收方拉低</text>
+  <text class="sub" x="60" y="220" font-size="10">停止信号正好相反：SCL 高时 SDA 上升。</text>
+</svg></p>
+
+<section class="callout note"><h3 class="callout-title">数据为什么只能在 SCL 低电平期间变</h3><p>因为<strong>起始和停止是靠&quot;SDA 在 SCL 高电平期间跳变&quot;定义的</strong>。</p>
+<p>如果数据位也能在 SCL 高电平期间随便跳，硬件就分不清&quot;这是数据&quot;还是&quot;这是起始/停止&quot;。规定&quot;高电平期间 SDA 必须稳定&quot;，起始和停止才有唯一的识别特征。</p>
+<p>所以时序图里你永远看到：SCL 低 → SDA 变化 → SCL 变高（采样）→ SCL 变低 → 再变化。</p>
+</section>
+<hr>
+<h2 id="sec-3">3. 地址：7 位地址 + 1 位读写</h2>
+<p>I2C 的从机地址是 <strong>7 位</strong>。第一帧发的是&quot;地址左移一位，最低位放读写方向&quot;：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>发送字节</mtext><mo>=</mo><mo stretchy="false">(</mo><mtext>addr</mtext><mo>≪</mo><mn>1</mn><mo stretchy="false">)</mo><mtext> </mtext><mi mathvariant="normal">∣</mi><mtext> </mtext><mi>R</mi><mi mathvariant="normal">/</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">\text{发送字节} = (\text{addr} \ll 1) \,|\, R/W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">发送字节</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord text"><span class="mord">addr</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≪</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.00773em;">R</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span></span></p>
+<ul>
+<li><code>R/W = 0</code> → 主机要<strong>写</strong></li>
+<li><code>R/W = 1</code> → 主机要<strong>读</strong></li>
+</ul>
+<p>0.96 寸 OLED 常用 SSD1306 芯片，7 位地址是 <strong>0x3C</strong>（有的模块是 0x3D，由模块上的电阻决定）：</p>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>计算</th>
+<th>发送字节</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>写</td>
+<td><code>0x3C &lt;&lt; 1 | 0</code></td>
+<td><strong>0x78</strong></td>
+</tr>
+<tr>
+<td>读</td>
+<td><code>0x3C &lt;&lt; 1 | 1</code></td>
+<td><strong>0x79</strong></td>
+</tr>
+</tbody></table>
+
+<section class="callout warn"><h3 class="callout-title">90% 的&quot;I2C 无应答&quot;都是这一件事</h3><p>网上代码里经常直接写 <code>0x78</code>，也经常写 <code>0x3C</code>，新手照抄就错。先把规矩说清楚：</p>
+<ul>
+<li><strong>数据手册、CubeMX 的从机地址栏</strong>用的是 <strong>7 位地址 0x3C</strong>。</li>
+<li><strong>HAL 库所有 I2C 函数的 <code>DevAddress</code> 参数要的是&quot;已经左移一位的 8 位地址&quot;</strong>，也就是 <code>0x3C &lt;&lt; 1 = 0x78</code>。HAL 内部不会再帮你移位，它直接把这个字节写到 DR 上。</li>
+</ul>
+<p>所以在头文件里把 7 位和 8 位都定义成宏，调用处只用宏名，就不会混：</p>
+<p><strong>文件：<code>Hardware/Inc/ssd1306.h</code></strong></p>
+<pre><code class="language-c">#ifndef __SSD1306_H
+#define __SSD1306_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+/* SSD1306 数据手册的 7 位地址是 0x3C；有的模块焊成 0x3D */
+#define SSD1306_ADDR7       0x3CU
+/* HAL 的 DevAddress 要&quot;已左移一位&quot;的 8 位值：写 0x78、读 0x79 */
+#define SSD1306_ADDR8       (SSD1306_ADDR7 &lt;&lt; 1)
+
+#define SSD1306_CMD         0x00U   /* 控制字节：0x00 后面是命令 */
+#define SSD1306_DATA        0x40U   /* 控制字节：0x40 后面是显存数据 */
+
+#define SSD1306_PAGES       8U      /* 128×64：8 页 */
+#define SSD1306_WIDTH       128U    /* 每页 128 列 */
+#define SSD1306_I2C_TIMEOUT 100U    /* 100kHz 下 2 字节约 0.2ms，100ms 足够 */
+
+void OLED_Init(void);
+void OLED_Clear(void);
+void OLED_SetPos(uint8_t page, uint8_t col);
+void OLED_WriteCmd(uint8_t cmd);
+void OLED_WriteData(const uint8_t *data, uint16_t len);
+void OLED_Dot(uint8_t page, uint8_t col, uint8_t on);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __SSD1306_H */
+</code></pre>
+<p>调用时写 <code>HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, buf, len, 100)</code> 就对；直接把 <code>0x3C</code> 传进去就是错，会 NACK。</p>
+<p>看到 NACK 时，先检查这里是不是把 7 位地址直接传进去了，能省半小时。</p>
+</section>
+<hr>
+<h2 id="sec-4">4. 一次写操作长什么样</h2>
+<p>以&quot;给 OLED 写一个命令&quot;为例：设备地址 0x3C、控制字节 0x00（表示后面是命令）、命令 0xAE（关显示）。</p>
+<pre><code>S | 0x78 | ACK | 0x00 | ACK | 0xAE | ACK | P
+</code></pre>
+<p>对应 HAL。驱动放 <code>Hardware/Src/ssd1306.c</code>，寄存器型从机的读写示例单独放一个文件：</p>
+<p><strong>文件：<code>Hardware/Src/ssd1306.c</code></strong></p>
+<pre><code class="language-c">#include &quot;ssd1306.h&quot;
+#include &quot;i2c.h&quot;          /* hi2c1 在这里 extern 声明 */
+#include &lt;string.h&gt;
+
+/* 上电初始化序列，全部来自 SSD1306 数据手册（Application Note 表格） */
+static const uint8_t s_init_cmds[] = {
+    0xAE,        /* 关显示 */
+    0xD5, 0x80,  /* 时钟分频 = 1，振荡频率档位 8 */
+    0xA8, 0x3F,  /* 复用率 = 64 行（0x3F） */
+    0xD3, 0x00,  /* 显示偏移 = 0 */
+    0x40,        /* 显存起始行 = 0 */
+    0x8D, 0x14,  /* 开电荷泵（必须，否则屏不亮） */
+    0x20, 0x00,  /* 水平寻址模式 */
+    0xA1,        /* 段重映射：列 127 → SEG0（左右不镜像） */
+    0xC8,        /* COM 反向扫描：上下不镜像 */
+    0xDA, 0x12,  /* COM 引脚配置：128×64 用 0x12 */
+    0x81, 0xCF,  /* 对比度 0xCF */
+    0xD9, 0xF1,  /* 预充电周期 */
+    0xDB, 0x40,  /* VCOMH 电压 */
+    0xA4,        /* 显示跟随显存 */
+    0xA6,        /* 正常显示（非反白） */
+    0x2E,        /* 关滚动 */
+    0xAF         /* 开显示 */
+};
+
+/* 发一条命令：0x00 是 SSD1306 的控制字节，声明后面是命令流 */
+void OLED_WriteCmd(uint8_t cmd)
+{
+    uint8_t buf[2] = {SSD1306_CMD, cmd};
+    HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, buf, 2, SSD1306_I2C_TIMEOUT);
+}
+
+/* 连续写显存数据：一个事务最多 32 字节，避免栈上开大数组 */
+void OLED_WriteData(const uint8_t *data, uint16_t len)
+{
+    uint8_t buf[33];                    /* 1 个控制字节 + 最多 32 字节数据 */
+    while (len &gt; 0U) {
+        uint16_t n = (len &gt; 32U) ? 32U : len;
+        buf[0] = SSD1306_DATA;
+        memcpy(&amp;buf[1], data, n);
+        HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, buf, (uint16_t)(n + 1U),
+                                SSD1306_I2C_TIMEOUT);
+        data += n;
+        len  -= n;
+    }
+}
+
+/* 定位到第 page 页（0~7）的第 col 列（0~127） */
+void OLED_SetPos(uint8_t page, uint8_t col)
+{
+    uint8_t cmd[4];
+    cmd[0] = SSD1306_CMD;
+    cmd[1] = (uint8_t)(0xB0U | (page &amp; 0x07U));   /* 页地址命令 0xB0~0xB7 */
+    cmd[2] = (uint8_t)(col &amp; 0x0FU);              /* 列地址低 4 位 */
+    cmd[3] = (uint8_t)(0x10U | (col &gt;&gt; 4));       /* 列地址高 4 位 */
+    HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, cmd, 4, SSD1306_I2C_TIMEOUT);
+}
+
+/* 清屏：8 页 × 128 列全部写 0 */
+void OLED_Clear(void)
+{
+    static const uint8_t zeros[SSD1306_WIDTH] = {0};
+    for (uint8_t p = 0; p &lt; SSD1306_PAGES; p++) {
+        OLED_SetPos(p, 0);
+        OLED_WriteData(zeros, SSD1306_WIDTH);
+    }
+}
+
+/* 点亮/熄灭某页某列最上面的像素（bit0 在上） */
+void OLED_Dot(uint8_t page, uint8_t col, uint8_t on)
+{
+    uint8_t v = on ? 0x01U : 0x00U;
+    OLED_SetPos(page, col);
+    OLED_WriteData(&amp;v, 1);
+}
+
+void OLED_Init(void)
+{
+    for (uint16_t i = 0; i &lt; sizeof(s_init_cmds); i++) {
+        OLED_WriteCmd(s_init_cmds[i]);
+    }
+    OLED_Clear();
+}
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/i2c_mem_demo.c</code></strong>（教学示例：寄存器型从机如 MPU6050 的读写，可删）</p>
+<pre><code class="language-c">#include &quot;i2c.h&quot;
+#include &lt;stdint.h&gt;
+
+#define MPU_ADDR (0x68 &lt;&lt; 1)   /* MPU6050 的 7 位地址 0x68，左移一位给 HAL */
+
+void I2C_MemDemo(void)
+{
+    uint8_t cmd = 0xAE;
+    uint8_t id  = 0;
+
+    /* 句柄、8 位地址、寄存器地址、地址宽度、数据、长度、超时 */
+    HAL_I2C_Mem_Write(&amp;hi2c1, MPU_ADDR, 0x00, I2C_MEMADD_SIZE_8BIT, &amp;cmd, 1, 100);
+    HAL_I2C_Mem_Read (&amp;hi2c1, MPU_ADDR, 0x75, I2C_MEMADD_SIZE_8BIT, &amp;id,  1, 100);
+}
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">为什么是这几句</h3><ul>
+<li><code>0x00</code> 控制字节不能省：SSD1306 靠它区分&quot;接下来是命令还是显存数据&quot;，少写这个字节，芯片会把命令 0xAE 当成显存数据画到屏上，现象是<strong>屏幕某个角落多出一排点、命令完全没生效</strong>。</li>
+<li>超时参数写 <code>100</code>：100kHz 下 2 个字节连 ACK 约 0.2ms，100ms 余量足够；写成 <code>HAL_MAX_DELAY</code> 时，从机没接好程序会<strong>永远卡在这一行</strong>，看不出是哪里出错。</li>
+<li>返回值要接：<code>HAL_I2C_Master_Transmit</code> 返回 <code>HAL_ERROR</code> 多半是 NACK、<code>HAL_TIMEOUT</code> 多半是总线被拉死。丢掉返回值，现象就是&quot;代码跑得好好的，屏就是不亮&quot;。</li>
+<li>读寄存器必须用 <code>HAL_I2C_Mem_Read</code> 而不是 <code>Master_Receive</code>：单独 <code>Receive</code> 没法先告诉从机&quot;我要哪个寄存器&quot;，只能从上次的指针位置瞎读。<code>Mem_Read</code> 内部做了&quot;写寄存器地址 → 重复起始 → 读&quot;。</li>
+</ul>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么不用&quot;自己拼数组 + Master_Transmit&quot;做读操作</h3><p>写寄存器其实可以拼 <code>{寄存器, 数据}</code> 一次发出去；但读操作中间必须插入一次<strong>重复起始</strong>（S 而不是 P），手拼做不到——要么先 <code>Transmit</code> 再 <code>Receive</code>（中间 HAL 会插入停止信号，从机把地址指针清掉，读回 0xFF），要么就得自己写时序。<code>Mem_Write</code>/<code>Mem_Read</code> 就是为了这两步而存在的封装，<strong>能用封装就别手拼</strong>。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">哪些代码&quot;故意没写&quot;</h3><p>本文不写 <code>MX_I2C1_Init()</code> 和 <code>HAL_I2C_MspInit()</code>：前者配时钟频率和自身地址，后者在 <code>Core/Src/i2c.c</code> 里开 I2C1 时钟、把 PB6/PB7 配成&quot;复用开漏&quot;。<strong>手写最容易漏的是 GPIO 模式写成推挽</strong>，现象是第一个字节就 NACK（SDA 被主机强拉高，从机拉不低）。软件 I2C 没有这些，只有 GPIO 初始化（<code>MX_GPIO_Init()</code>），速度也只由 <code>delay_us</code> 决定，和 CubeMX 里填的 100k/400k 没有任何关系。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">读操作为什么要&quot;先写后读&quot;</h3><p>I2C 读数据不是&quot;直接说我要哪个寄存器&quot;。流程是：</p>
+<ol>
+<li><code>S | 地址+W | ACK | 寄存器地址 | ACK</code> —— 先把要读的寄存器地址告诉从机（相当于&quot;移动文件指针&quot;）。</li>
+<li><strong><code>S</code>（重复起始）<code>| 地址+R | ACK | 数据 | NACK | P</code></strong> —— 再以读模式重新开始，从机把该寄存器的值吐出来。</li>
+</ol>
+<p>HAL 的 <code>HAL_I2C_Mem_Read</code> 内部自动做这两步（用重复起始，不是停止再起始，避免总线被别的设备抢走）。这也是为什么它比 <code>Master_Receive</code> 更好用。</p>
+</section>
+<hr>
+<h2 id="sec-5">5. OLED：I2C 上最常见的负载</h2>
+<p>0.96 寸 OLED 模块的核心是 <strong>SSD1306</strong> 驱动芯片：</p>
+<ul>
+<li>分辨率 <strong>128×64</strong></li>
+<li>显存按&quot;页&quot;组织：8 页，每页 8 行像素，每列一个字节（纵向 8 个像素，低位在上）</li>
+</ul>
+<p>所以显存是 <code>8 页 × 128 列 = 1024 字节</code>。</p>
+<p>写显存的方式和写命令一样，只是控制字节不同：</p>
+<table>
+<thead>
+<tr>
+<th>控制字节</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>0x00</strong></td>
+<td>后面全是<strong>命令</strong></td>
+</tr>
+<tr>
+<td><strong>0x40</strong></td>
+<td>后面全是<strong>显存数据</strong></td>
+</tr>
+</tbody></table>
+<p>定位、写一列、画点这三个函数已经在上面 <code>Hardware/Src/ssd1306.c</code> 的完整文件里（<code>OLED_SetPos</code> / <code>OLED_WriteData</code> / <code>OLED_Dot</code>）。要把像素拼成字符，还需要&quot;字模 + 显示&quot;这一层，单独放两个文件：</p>
+<p><strong>文件：<code>Hardware/Inc/ssd1306_text.h</code></strong></p>
+<pre><code class="language-c">#ifndef __SSD1306_TEXT_H
+#define __SSD1306_TEXT_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+#define OLED_FONT_W    5U   /* 字模宽 5 像素 */
+#define OLED_FONT_H    7U   /* 字模高 7 像素（放在 8 像素高的页里） */
+#define OLED_CHAR_W    6U   /* 每个字符占 6 列：5 列字模 + 1 列间隔 */
+
+void OLED_ShowChar(uint8_t page, uint8_t col, char ch);
+void OLED_ShowString(uint8_t page, uint8_t col, const char *str);
+void OLED_ShowNum(uint8_t page, uint8_t col, uint32_t num, uint8_t len);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __SSD1306_TEXT_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/ssd1306_text.c</code></strong></p>
+<pre><code class="language-c">#include &quot;ssd1306_text.h&quot;
+#include &quot;ssd1306.h&quot;
+#include &quot;i2c.h&quot;          /* hi2c1 在这里 extern 声明 */
+#include &lt;string.h&gt;
+
+/* 5×7 点阵，ASCII 0x20~0x5A；每字符 5 字节，纵向取模、低位在上 */
+static const uint8_t s_font5x7[][OLED_FONT_W] = {
+    /* 0x20 */ {0x00,0x00,0x00,0x00,0x00}, /* 0x21 */ {0x00,0x00,0x5F,0x00,0x00},
+    /* 0x22 */ {0x00,0x07,0x00,0x07,0x00}, /* 0x23 */ {0x14,0x7F,0x14,0x7F,0x14},
+    /* 0x24 */ {0x24,0x2A,0x7F,0x2A,0x12}, /* 0x25 */ {0x23,0x13,0x08,0x64,0x62},
+    /* 0x26 */ {0x36,0x49,0x55,0x22,0x50}, /* 0x27 */ {0x00,0x05,0x03,0x00,0x00},
+    /* 0x28 */ {0x00,0x1C,0x22,0x41,0x00}, /* 0x29 */ {0x00,0x41,0x22,0x1C,0x00},
+    /* 0x2A */ {0x14,0x08,0x3E,0x08,0x14}, /* 0x2B */ {0x08,0x08,0x3E,0x08,0x08},
+    /* 0x2C */ {0x00,0x50,0x30,0x00,0x00}, /* 0x2D */ {0x08,0x08,0x08,0x08,0x08},
+    /* 0x2E */ {0x00,0x60,0x60,0x00,0x00}, /* 0x2F */ {0x20,0x10,0x08,0x04,0x02},
+    /* 0x30 */ {0x3E,0x51,0x49,0x45,0x3E}, /* 0x31 */ {0x00,0x42,0x7F,0x40,0x00},
+    /* 0x32 */ {0x42,0x61,0x51,0x49,0x46}, /* 0x33 */ {0x21,0x41,0x45,0x4B,0x31},
+    /* 0x34 */ {0x18,0x14,0x12,0x7F,0x10}, /* 0x35 */ {0x27,0x45,0x45,0x45,0x39},
+    /* 0x36 */ {0x3C,0x4A,0x49,0x49,0x30}, /* 0x37 */ {0x01,0x71,0x09,0x05,0x03},
+    /* 0x38 */ {0x36,0x49,0x49,0x49,0x36}, /* 0x39 */ {0x06,0x49,0x49,0x29,0x1E},
+    /* 0x3A */ {0x00,0x36,0x36,0x00,0x00}, /* 0x3B */ {0x00,0x56,0x36,0x00,0x00},
+    /* 0x3C */ {0x00,0x08,0x14,0x22,0x41}, /* 0x3D */ {0x14,0x14,0x14,0x14,0x14},
+    /* 0x3E */ {0x41,0x22,0x14,0x08,0x00}, /* 0x3F */ {0x02,0x01,0x51,0x09,0x06},
+    /* 0x40 */ {0x32,0x49,0x79,0x41,0x3E}, /* 0x41 */ {0x7E,0x11,0x11,0x11,0x7E},
+    /* 0x42 */ {0x7F,0x49,0x49,0x49,0x36}, /* 0x43 */ {0x3E,0x41,0x41,0x41,0x22},
+    /* 0x44 */ {0x7F,0x41,0x41,0x22,0x1C}, /* 0x45 */ {0x7F,0x49,0x49,0x49,0x41},
+    /* 0x46 */ {0x7F,0x09,0x09,0x01,0x01}, /* 0x47 */ {0x3E,0x41,0x41,0x51,0x32},
+    /* 0x48 */ {0x7F,0x08,0x08,0x08,0x7F}, /* 0x49 */ {0x00,0x41,0x7F,0x41,0x00},
+    /* 0x4A */ {0x20,0x40,0x41,0x3F,0x01}, /* 0x4B */ {0x7F,0x08,0x14,0x22,0x41},
+    /* 0x4C */ {0x7F,0x40,0x40,0x40,0x40}, /* 0x4D */ {0x7F,0x02,0x04,0x02,0x7F},
+    /* 0x4E */ {0x7F,0x04,0x08,0x10,0x7F}, /* 0x4F */ {0x3E,0x41,0x41,0x41,0x3E},
+    /* 0x50 */ {0x7F,0x09,0x09,0x09,0x06}, /* 0x51 */ {0x3E,0x41,0x51,0x21,0x5E},
+    /* 0x52 */ {0x7F,0x09,0x19,0x29,0x46}, /* 0x53 */ {0x46,0x49,0x49,0x49,0x31},
+    /* 0x54 */ {0x01,0x01,0x7F,0x01,0x01}, /* 0x55 */ {0x3F,0x40,0x40,0x40,0x3F},
+    /* 0x56 */ {0x1F,0x20,0x40,0x20,0x1F}, /* 0x57 */ {0x7F,0x20,0x18,0x20,0x7F},
+    /* 0x58 */ {0x63,0x14,0x08,0x14,0x63}, /* 0x59 */ {0x03,0x04,0x78,0x04,0x03},
+    /* 0x5A */ {0x61,0x51,0x49,0x45,0x43}
+};
+
+/* 在 (page, col) 处画一个字符：一次 I2C 事务写 6 列 */
+void OLED_ShowChar(uint8_t page, uint8_t col, char ch)
+{
+    uint8_t buf[OLED_CHAR_W + 1];   /* 1 个控制字节 + 5 列字模 + 1 列空隙 */
+    uint8_t idx;
+
+    if (ch &gt;= &#39;a&#39; &amp;&amp; ch &lt;= &#39;z&#39;) ch = (char)(ch - 32);   /* 只做了一套大写 */
+    if (ch &lt; &#39; &#39; || ch &gt; &#39;Z&#39;) ch = &#39;?&#39;;
+    idx = (uint8_t)(ch - &#39; &#39;);
+
+    buf[0] = SSD1306_DATA;
+    memcpy(&amp;buf[1], s_font5x7[idx], OLED_FONT_W);
+    buf[OLED_CHAR_W] = 0x00;        /* 字符之间留 1 列空白 */
+    OLED_SetPos(page, col);
+    HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, buf, sizeof(buf), SSD1306_I2C_TIMEOUT);
+}
+
+void OLED_ShowString(uint8_t page, uint8_t col, const char *str)
+{
+    while (*str != &#39;\0&#39; &amp;&amp; (uint16_t)(col + OLED_CHAR_W) &lt;= SSD1306_WIDTH) {
+        OLED_ShowChar(page, col, *str++);
+        col = (uint8_t)(col + OLED_CHAR_W);
+    }
+}
+
+/* 定长显示十进制数，例如 len=5 显示 &quot;00042&quot; */
+void OLED_ShowNum(uint8_t page, uint8_t col, uint32_t num, uint8_t len)
+{
+    char tmp[11];
+    if (len &gt; 10U) len = 10U;
+    for (uint8_t i = 0; i &lt; len; i++) {
+        tmp[len - 1U - i] = (char)(&#39;0&#39; + num % 10U);   /* 从最低位往前填 */
+        num /= 10U;
+    }
+    tmp[len] = &#39;\0&#39;;
+    OLED_ShowString(page, col, tmp);
+}
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">为什么列地址要拆成两个字节</h3><p>SSD1306 的&quot;设置列&quot;命令被拆成两条：低 4 位用 <code>0x00~0x0F</code>，高 4 位用 <code>0x10~0x1F</code>。所以 <code>col</code> 必须<strong>按位拆开</strong>，不能直接写 <code>col</code>。</p>
+<p>老教程里常见一句 <code>uint8_t cmd[] = {0x00, 0xB0 | page, 0x00, 0x10};</code>——它把列地址写死成 0 了。现象很典型：<strong>不管传什么 col，点永远画在最左边一列</strong>。这就是&quot;看起来能跑、实际参数没生效&quot;的坑。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么一条命令一条数据，不合并</h3><p>可以把&quot;定位 + 数据&quot;拼成 <code>{0x00, 0xB0|page, 低4位, 0x10|高4位}</code> 再跟 <code>{0x40, dat}</code>，但中间必须换控制字节，一条 <code>Master_Transmit</code> 只能连续发同一种类型。想省时间就把整个页的 128 列拼成 <code>{0x40, d0…d127}</code> 一次发完——<strong>这才是 OLED 库刷屏的做法</strong>，一页一次 I2C 事务，比一个点两次快两个数量级。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">哪些代码&quot;故意没写&quot;</h3><p><code>0xB0</code>、<code>0x10</code>、<code>0x40</code> 这些命令字来自 SSD1306 数据手册，不是随便定的；初始化序列（关显示、设时钟、设复用率、开电荷泵…）在上面 <code>OLED_Init()</code> 的 <code>s_init_cmds[]</code> 里已经完整列出，顺序不能换——<code>0x8D,0x14</code>（开电荷泵）漏掉的现象就是&quot;通信全对、屏全黑&quot;。<code>hi2c1</code> 的初始化由 <code>MX_I2C1_Init()</code> 完成，不用手写。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么写一个字节就画了 8 个点</h3><p>SSD1306 的显存是<strong>纵向排布</strong>的：一个字节的 8 个 bit 对应同一列上连续的 8 行。</p>
+<p>所以它不是&quot;一个字节一个像素&quot;，而是&quot;一个字节管一列 8 个像素&quot;。写汉字/数字时，字模按&quot;列优先、低位在上&quot;取模，正好一字节一列地推。</p>
+<p>如果字模取模方式选成了&quot;横向取模&quot;，显示出来就是<strong>旋转 90° 的乱码</strong>——这是 OLED 调试第一大坑。</p>
+</section>
+
+<section class="callout warn"><h3 class="callout-title">硬件 I2C 在 F103 上的历史包袱</h3><p>STM32F103 的硬件 I2C 外设早年有已知的<strong>总线死锁 / BUSY 卡死</strong>问题（勘误手册里有记录），表现为：从机在传输中途掉电或复位，主机 I2C 状态机卡在 BUSY，之后所有通信都超时，只能整机复位。</p>
+<p>所以<strong>江协科技等主流教程在 F103 上都用软件 I2C</strong>（GPIO 模拟 SCL/SDA 时序），牺牲一点速度换稳定。</p>
+<p>选择建议：</p>
+<ul>
+<li><strong>学习、驱动 OLED/传感器</strong>：软件 I2C，代码可控、能单步、不会卡死。</li>
+<li><strong>量产、高速（400kHz）、低 CPU 占用</strong>：硬件 I2C + 超时检测 + 总线恢复（发 9 个时钟解锁）。</li>
+<li><strong>面试被问&quot;软件 I2C 和硬件 I2C 区别&quot;</strong>：答&quot;软件靠 GPIO 翻转、占 CPU、速度低但可移植可调试；硬件靠外设、不占 CPU、速度快但 F103 上有勘误、易死锁&quot;。</li>
+</ul>
+</section>
+<hr>
+<h2 id="sec-6">6. 软件 I2C 的核心就是四行</h2>
+<p>完整实现放两个文件（PB6 = SCL，PB7 = SDA），接口和时序分开：</p>
+<p><strong>文件：<code>Hardware/Inc/i2c_bus.h</code></strong></p>
+<pre><code class="language-c">#ifndef __I2C_BUS_H
+#define __I2C_BUS_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+/* CubeMX 里把 PB6/PB7 配成 GPIO_Output + Output Open Drain，并开内部上拉 */
+#define I2C_SCL_PORT   GPIOB
+#define I2C_SCL_PIN    GPIO_PIN_6
+#define I2C_SDA_PORT   GPIOB
+#define I2C_SDA_PIN    GPIO_PIN_7
+
+void    I2C_Start(void);                        /* 起始：SCL 高时 SDA 下降 */
+void    I2C_Stop(void);                         /* 停止：SCL 高时 SDA 上升 */
+uint8_t I2C_WaitAck(void);                      /* 读第 9 个时钟，0 = 应答 */
+void    I2C_SendByte(uint8_t byte);             /* 高位先发 8 位 */
+uint8_t I2C_ReadByte(uint8_t ack);              /* 读 8 位，ack=1 回 ACK */
+void    I2C_WriteBytes(uint8_t addr7, const uint8_t *data, uint16_t len);
+uint8_t I2C_Probe(uint8_t addr7);               /* 扫描用：0 表示有应答 */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __I2C_BUS_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/i2c_bus.c</code></strong></p>
+<pre><code class="language-c">#include &quot;i2c_bus.h&quot;
+
+#define SCL_H()    HAL_GPIO_WritePin(I2C_SCL_PORT, I2C_SCL_PIN, GPIO_PIN_SET)
+#define SCL_L()    HAL_GPIO_WritePin(I2C_SCL_PORT, I2C_SCL_PIN, GPIO_PIN_RESET)
+#define SDA_H()    HAL_GPIO_WritePin(I2C_SDA_PORT, I2C_SDA_PIN, GPIO_PIN_SET)
+#define SDA_L()    HAL_GPIO_WritePin(I2C_SDA_PORT, I2C_SDA_PIN, GPIO_PIN_RESET)
+#define SDA_READ() HAL_GPIO_ReadPin(I2C_SDA_PORT, I2C_SDA_PIN)   /* 开漏下读 IDR 即线上电平 */
+
+/* 粗延时：72MHz 下内层循环约 3~4 个周期，18 次约 5μs，够 100kHz 用 */
+static void delay_us(uint32_t us)
+{
+    while (us--) { for (volatile uint32_t i = 0; i &lt; 18; i++) { } }
+}
+
+void I2C_Start(void)   /* SCL 高电平期间 SDA 下降 */
+{
+    SDA_H(); SCL_H(); delay_us(5);
+    SDA_L(); delay_us(5);
+    SCL_L();            /* 拉低 SCL，准备发第一位 */
+}
+
+void I2C_Stop(void)    /* SCL 高电平期间 SDA 上升 */
+{
+    SDA_L(); SCL_H(); delay_us(5);
+    SDA_H(); delay_us(5);
+}
+
+uint8_t I2C_WaitAck(void)
+{
+    SDA_H();                    /* 开漏写 1 = 放手，线交给从机控制 */
+    SCL_H(); delay_us(5);
+    uint8_t ack = (uint8_t)SDA_READ();   /* 读到 0 → 从机拉低 → ACK */
+    SCL_L(); delay_us(5);
+    return ack;
+}
+
+void I2C_SendByte(uint8_t byte)
+{
+    for (uint8_t i = 0; i &lt; 8U; i++) {
+        if (byte &amp; 0x80U) SDA_H(); else SDA_L();   /* MSB 先发 */
+        byte &lt;&lt;= 1;
+        SCL_H(); delay_us(5);                      /* 高电平期间数据稳定 */
+        SCL_L(); delay_us(5);
+    }
+}
+
+uint8_t I2C_ReadByte(uint8_t ack)
+{
+    uint8_t byte = 0;
+    SDA_H();                                       /* 放手 = 输入态 */
+    for (uint8_t i = 0; i &lt; 8U; i++) {
+        byte &lt;&lt;= 1;
+        SCL_H(); delay_us(5);
+        byte |= (SDA_READ() == GPIO_PIN_SET) ? 1U : 0U;
+        SCL_L(); delay_us(5);
+    }
+    if (ack) SDA_L(); else SDA_H();                /* 主机回 ACK / NACK */
+    SCL_H(); delay_us(5);
+    SCL_L(); delay_us(5);
+    return byte;
+}
+
+void I2C_WriteBytes(uint8_t addr7, const uint8_t *data, uint16_t len)
+{
+    I2C_Start();
+    I2C_SendByte((uint8_t)(addr7 &lt;&lt; 1));           /* 写方向：最低位 0 */
+    I2C_WaitAck();
+    for (uint16_t i = 0; i &lt; len; i++) {
+        I2C_SendByte(data[i]);
+        I2C_WaitAck();
+    }
+    I2C_Stop();
+}
+
+uint8_t I2C_Probe(uint8_t addr7)
+{
+    I2C_Start();
+    I2C_SendByte((uint8_t)(addr7 &lt;&lt; 1));
+    uint8_t ack = I2C_WaitAck();
+    I2C_Stop();
+    return ack;
+}
+</code></pre>
+<p>引脚配置：<strong>开漏输出 + 外部上拉</strong>（或者用内部上拉，但内部上拉 40kΩ 偏弱，只能低速短距离）。</p>
+
+<section class="callout note"><h3 class="callout-title">为什么没写&quot;把 SDA 切成输入&quot;</h3><p><code>SDA_READ()</code> 直接读就行。STM32 的引脚在<strong>开漏输出</strong>模式下，输入缓冲器依然是通的，<code>IDR</code> 反映的是引脚真实电平；输出 1 只是&quot;放手&quot;，不会和从机抢线。所以不需要 <code>GPIO_Init</code> 来回切方向——切方向反而会引入几个微秒的空窗，400kHz 下就是错位。</p>
+<p>反过来，如果配成<strong>推挽输出</strong>，写 1 会把线强拉高，从机拉不低，ACK 永远读成 1，现象就是&quot;程序以为每次都成功，其实从机根本没应答&quot;。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么延时是&quot;大约&quot;的</h3><p>I2C 只规定最高频率（100k/400k），没有最低频率，慢一点不会错，所以不需要精确延时。<code>delay_us</code> 里的 18 次循环是按 72MHz 估的；<code>-O0</code> 和 <code>-O2</code> 编译出来差一倍也没关系——真正要提速到 400kHz，把 <code>delay_us(5)</code> 改成 <code>delay_us(1)</code> 并重新估算循环次数即可。</p>
+<p>这就是软件 I2C 的取舍：<strong>时序完全可控、能单步、能加超时解锁，但精度靠&quot;猜&quot;、CPU 全程等待</strong>。硬件 I2C 反过来，配置一次就不用管，可 F103 上有 BUSY 死锁勘误（见上面的 warn）。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">哪些代码&quot;故意没写&quot;</h3><p>没有 GPIO 初始化：PB6/PB7 的时钟、模式、速度都在 <code>MX_GPIO_Init()</code> 里由 CubeMX 生成，手写容易把开漏写成推挽。<code>I2C_WriteBytes</code> 只做&quot;写一段&quot;，没有做&quot;读寄存器&quot;（先写寄存器地址 → 重复起始 → 读），因为那需要多一层寄存器地址概念；本课把起始/停止/应答/收发字节这一层给全，其余照同样的节奏拼即可。</p>
+</section>
+
+<section class="callout warn"><h3 class="callout-title">软件 I2C 的引脚方向问题</h3><p>SDA 是双向的：发数据时是输出，收 ACK 时必须切成<strong>输入</strong>去读。</p>
+<p>新手最常见的 bug：读 ACK 前忘了 <code>SDA_H()</code> 把线放开，引脚还拉着低，<code>SDA_READ()</code> 读到的永远是自己送出去的 0，于是&quot;ACK 永远成功&quot;——程序看着能跑，其实从机根本没应答。</p>
+<p>正确做法：发完 8 位后，把 SDA 设为输入（或输出高电平&quot;放手&quot;），读第 9 个时钟的电平，读完再切回输出。</p>
+</section>
+<hr>
+<h2 id="sec-7">7. 算一算</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：地址与字节</h3><p>某 EEPROM 的 7 位地址是 0x50。主机要往它的 0x0010 地址写 0xAB（16 位内部地址）。</p>
+<ol>
+<li>第一帧发的地址字节是多少（写）？</li>
+<li>整个写序列一共几个字节？</li>
+<li>100kHz 下，传输这几个字节最少要多久（不算起始/停止和 ACK 开销）？</li>
+</ol>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><ol>
+<li><code>0x50 &lt;&lt; 1 | 0 = 0xA0</code>。</li>
+<li>序列是：<code>地址字节(0xA0) + 地址高字节(0x00) + 地址低字节(0x10) + 数据(0xAB)</code>，共 <strong>4 个字节</strong>。每个字节后还有一个 ACK 位。</li>
+<li>一个字节 8 位 + 1 个 ACK = 9 个时钟。100kHz 下一个时钟 10μs：</li>
+</ol>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>4</mn><mo>×</mo><mn>9</mn><mo>×</mo><mn>10</mn><mi>μ</mi><mi>s</mi><mo>=</mo><mn>360</mn><mi>μ</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">4 \times 9 \times 10\mu s = 360\mu s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">9</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">10</span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">360</span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span></span></span></span></span></p>
+<p>实际还要加起始/停止各几个 μs，大约 <strong>400μs</strong>。所以 I2C 写 EEPROM 很慢，一次 1KB 要几百毫秒——这也是 EEPROM 写操作要&quot;页写 + 等待 5ms&quot;的原因。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：OLED 刷新要多久</h3><p>128×64 的 OLED，全屏刷新一次要发 1024 字节显存。100kHz 的 I2C，理论最短时间是多少？400kHz 呢？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>每字节 9 个时钟（8 数据 + 1 ACK）。</p>
+<p>100kHz：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>1024</mn><mo>×</mo><mn>9</mn><mi mathvariant="normal">/</mi><mn>100000</mn><mo>=</mo><mn>0.0922</mn><mi>s</mi><mo>≈</mo><mn>92</mn><mi>m</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">1024 \times 9 / 100000 = 0.0922s \approx 92ms</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1024</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">9/100000</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.0922</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">92</span><span class="mord mathnormal">m</span><span class="mord mathnormal">s</span></span></span></span></span></p>
+<p>400kHz：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>1024</mn><mo>×</mo><mn>9</mn><mi mathvariant="normal">/</mi><mn>400000</mn><mo>=</mo><mn>0.023</mn><mi>s</mi><mo>≈</mo><mn>23</mn><mi>m</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">1024 \times 9 / 400000 = 0.023s \approx 23ms</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1024</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">9/400000</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.023</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">23</span><span class="mord mathnormal">m</span><span class="mord mathnormal">s</span></span></span></span></span></p>
+<p>所以 <strong>100kHz 下全屏刷新最多约 10 帧/秒</strong>，做动画会明显卡顿；400kHz 约 40 帧/秒，勉强够用。</p>
+<p>实用结论：OLED 做界面时<strong>只刷新变化的区域</strong>，不要每帧全屏推。这也是为什么很多 OLED 库有&quot;局部刷新&quot;接口。</p>
+</div></details></section>
+<hr>
+<h2 id="sec-8">8. 动手项目</h2>
+
+<section class="callout project"><h3 class="callout-title">动手项目</h3><p><strong>I2C 扫描器 + OLED 计数器</strong></p>
+<ol>
+<li>先写一个<strong>总线扫描</strong>：遍历 7 位地址 0x08~0x77，用 <code>HAL_I2C_IsDeviceReady()</code> 探测，把有应答的地址通过串口打印出来。</li>
+<li>用扫描到的地址初始化 OLED，显示：<ul>
+<li>第一行：<code>STM32 I2C OK</code></li>
+<li>第二行：一个每秒加 1 的计数</li>
+<li>第三行：当前 I2C 速度（100k / 400k）</li>
+</ul>
+</li>
+</ol>
+<p><strong>验收标准</strong>：</p>
+<ol>
+<li>扫描能稳定找到 OLED 的地址（0x3C 或 0x3D），不重复、不遗漏。</li>
+<li>OLED 上电后 1 秒内出字，<strong>不花屏</strong>（说明初始化命令序列完整）。</li>
+<li>计数每秒准确加 1，不跳变（说明没有在中断里刷新 OLED）。</li>
+<li>拔掉 OLED 再插上，程序不卡死（软件 I2C 应该能恢复；硬件 I2C 大概率卡 BUSY，正好对比）。</li>
+</ol>
+<p><strong>加分</strong>：把&quot;温度/电压&quot;也显示上去，数据从 s15 的 ADC 来。</p>
+<p><strong>文件放置表</strong></p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>文件夹</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ssd1306.h</code></td>
+<td><code>Hardware/Inc/</code></td>
+<td>地址宏、控制字节、底层接口</td>
+</tr>
+<tr>
+<td><code>ssd1306_text.h</code></td>
+<td><code>Hardware/Inc/</code></td>
+<td>字模尺寸、字符/字符串/数字显示接口</td>
+</tr>
+<tr>
+<td><code>app_i2c.h</code></td>
+<td><code>App/Inc/</code></td>
+<td>扫描与界面流程接口</td>
+</tr>
+<tr>
+<td><code>ssd1306.c</code></td>
+<td><code>Hardware/Src/</code></td>
+<td>初始化、命令/数据、定位、清屏、画点</td>
+</tr>
+<tr>
+<td><code>ssd1306_text.c</code></td>
+<td><code>Hardware/Src/</code></td>
+<td>5×7 字模 + 显示函数</td>
+</tr>
+<tr>
+<td><code>retarget.c</code></td>
+<td><code>Hardware/Src/</code></td>
+<td><code>printf</code> 重定向（<code>_write</code>）</td>
+</tr>
+<tr>
+<td><code>app_i2c.c</code></td>
+<td><code>App/Src/</code></td>
+<td>总线扫描、OLED 界面、每秒计数</td>
+</tr>
+<tr>
+<td><code>main.h</code></td>
+<td><code>Core/Inc/</code></td>
+<td><code>Error_Handler</code> 声明</td>
+</tr>
+<tr>
+<td><code>main.c</code></td>
+<td><code>Core/Src/</code></td>
+<td>初始化调用、主循环</td>
+</tr>
+<tr>
+<td><code>i2c.c/h</code>、<code>usart.c/h</code>、<code>gpio.c/h</code></td>
+<td><code>Core/Src</code>、<code>Core/Inc</code></td>
+<td>CubeMX 生成，不手写</td>
+</tr>
+</tbody></table>
+<p><strong>文件：<code>Hardware/Inc/ssd1306.h</code></strong></p>
+<pre><code class="language-c">#ifndef __SSD1306_H
+#define __SSD1306_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+/* SSD1306 数据手册的 7 位地址是 0x3C；有的模块焊成 0x3D */
+#define SSD1306_ADDR7       0x3CU
+/* HAL 的 DevAddress 要&quot;已左移一位&quot;的 8 位值：写 0x78、读 0x79 */
+#define SSD1306_ADDR8       (SSD1306_ADDR7 &lt;&lt; 1)
+
+#define SSD1306_CMD         0x00U   /* 控制字节：0x00 后面是命令 */
+#define SSD1306_DATA        0x40U   /* 控制字节：0x40 后面是显存数据 */
+
+#define SSD1306_PAGES       8U      /* 128×64：8 页 */
+#define SSD1306_WIDTH       128U    /* 每页 128 列 */
+#define SSD1306_I2C_TIMEOUT 100U    /* 100kHz 下 2 字节约 0.2ms，100ms 足够 */
+
+void OLED_Init(void);
+void OLED_Clear(void);
+void OLED_SetPos(uint8_t page, uint8_t col);
+void OLED_WriteCmd(uint8_t cmd);
+void OLED_WriteData(const uint8_t *data, uint16_t len);
+void OLED_Dot(uint8_t page, uint8_t col, uint8_t on);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __SSD1306_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Inc/ssd1306_text.h</code></strong></p>
+<pre><code class="language-c">#ifndef __SSD1306_TEXT_H
+#define __SSD1306_TEXT_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+#define OLED_FONT_W    5U   /* 字模宽 5 像素 */
+#define OLED_FONT_H    7U   /* 字模高 7 像素（放在 8 像素高的页里） */
+#define OLED_CHAR_W    6U   /* 每个字符占 6 列：5 列字模 + 1 列间隔 */
+
+void OLED_ShowChar(uint8_t page, uint8_t col, char ch);
+void OLED_ShowString(uint8_t page, uint8_t col, const char *str);
+void OLED_ShowNum(uint8_t page, uint8_t col, uint32_t num, uint8_t len);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __SSD1306_TEXT_H */
+</code></pre>
+<p><strong>文件：<code>App/Inc/app_i2c.h</code></strong></p>
+<pre><code class="language-c">#ifndef __APP_I2C_H
+#define __APP_I2C_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+uint8_t App_I2CScan(void);   /* 扫描 0x08~0x77，返回找到的设备数 */
+void    App_I2CInit(void);   /* 扫描 + OLED 初始化 + 画静态文字 */
+void    App_I2CLoop(void);   /* 主循环调用：每秒计数 +1 */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __APP_I2C_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/ssd1306.c</code></strong></p>
+<pre><code class="language-c">#include &quot;ssd1306.h&quot;
+#include &quot;i2c.h&quot;          /* hi2c1 在这里 extern 声明 */
+#include &lt;string.h&gt;
+
+/* 上电初始化序列，全部来自 SSD1306 数据手册（Application Note 表格） */
+static const uint8_t s_init_cmds[] = {
+    0xAE,        /* 关显示 */
+    0xD5, 0x80,  /* 时钟分频 = 1，振荡频率档位 8 */
+    0xA8, 0x3F,  /* 复用率 = 64 行（0x3F） */
+    0xD3, 0x00,  /* 显示偏移 = 0 */
+    0x40,        /* 显存起始行 = 0 */
+    0x8D, 0x14,  /* 开电荷泵（必须，否则屏不亮） */
+    0x20, 0x00,  /* 水平寻址模式 */
+    0xA1,        /* 段重映射：列 127 → SEG0（左右不镜像） */
+    0xC8,        /* COM 反向扫描：上下不镜像 */
+    0xDA, 0x12,  /* COM 引脚配置：128×64 用 0x12 */
+    0x81, 0xCF,  /* 对比度 0xCF */
+    0xD9, 0xF1,  /* 预充电周期 */
+    0xDB, 0x40,  /* VCOMH 电压 */
+    0xA4,        /* 显示跟随显存 */
+    0xA6,        /* 正常显示（非反白） */
+    0x2E,        /* 关滚动 */
+    0xAF         /* 开显示 */
+};
+
+/* 发一条命令：0x00 是 SSD1306 的控制字节，声明后面是命令流 */
+void OLED_WriteCmd(uint8_t cmd)
+{
+    uint8_t buf[2] = {SSD1306_CMD, cmd};
+    HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, buf, 2, SSD1306_I2C_TIMEOUT);
+}
+
+/* 连续写显存数据：一个事务最多 32 字节，避免栈上开大数组 */
+void OLED_WriteData(const uint8_t *data, uint16_t len)
+{
+    uint8_t buf[33];                    /* 1 个控制字节 + 最多 32 字节数据 */
+    while (len &gt; 0U) {
+        uint16_t n = (len &gt; 32U) ? 32U : len;
+        buf[0] = SSD1306_DATA;
+        memcpy(&amp;buf[1], data, n);
+        HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, buf, (uint16_t)(n + 1U),
+                                SSD1306_I2C_TIMEOUT);
+        data += n;
+        len  -= n;
+    }
+}
+
+/* 定位到第 page 页（0~7）的第 col 列（0~127） */
+void OLED_SetPos(uint8_t page, uint8_t col)
+{
+    uint8_t cmd[4];
+    cmd[0] = SSD1306_CMD;
+    cmd[1] = (uint8_t)(0xB0U | (page &amp; 0x07U));   /* 页地址命令 0xB0~0xB7 */
+    cmd[2] = (uint8_t)(col &amp; 0x0FU);              /* 列地址低 4 位 */
+    cmd[3] = (uint8_t)(0x10U | (col &gt;&gt; 4));       /* 列地址高 4 位 */
+    HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, cmd, 4, SSD1306_I2C_TIMEOUT);
+}
+
+/* 清屏：8 页 × 128 列全部写 0 */
+void OLED_Clear(void)
+{
+    static const uint8_t zeros[SSD1306_WIDTH] = {0};
+    for (uint8_t p = 0; p &lt; SSD1306_PAGES; p++) {
+        OLED_SetPos(p, 0);
+        OLED_WriteData(zeros, SSD1306_WIDTH);
+    }
+}
+
+/* 点亮/熄灭某页某列最上面的像素（bit0 在上） */
+void OLED_Dot(uint8_t page, uint8_t col, uint8_t on)
+{
+    uint8_t v = on ? 0x01U : 0x00U;
+    OLED_SetPos(page, col);
+    OLED_WriteData(&amp;v, 1);
+}
+
+void OLED_Init(void)
+{
+    for (uint16_t i = 0; i &lt; sizeof(s_init_cmds); i++) {
+        OLED_WriteCmd(s_init_cmds[i]);
+    }
+    OLED_Clear();
+}
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/ssd1306_text.c</code></strong></p>
+<pre><code class="language-c">#include &quot;ssd1306_text.h&quot;
+#include &quot;ssd1306.h&quot;
+#include &quot;i2c.h&quot;          /* hi2c1 在这里 extern 声明 */
+#include &lt;string.h&gt;
+
+/* 5×7 点阵，ASCII 0x20~0x5A；每字符 5 字节，纵向取模、低位在上 */
+static const uint8_t s_font5x7[][OLED_FONT_W] = {
+    /* 0x20 */ {0x00,0x00,0x00,0x00,0x00}, /* 0x21 */ {0x00,0x00,0x5F,0x00,0x00},
+    /* 0x22 */ {0x00,0x07,0x00,0x07,0x00}, /* 0x23 */ {0x14,0x7F,0x14,0x7F,0x14},
+    /* 0x24 */ {0x24,0x2A,0x7F,0x2A,0x12}, /* 0x25 */ {0x23,0x13,0x08,0x64,0x62},
+    /* 0x26 */ {0x36,0x49,0x55,0x22,0x50}, /* 0x27 */ {0x00,0x05,0x03,0x00,0x00},
+    /* 0x28 */ {0x00,0x1C,0x22,0x41,0x00}, /* 0x29 */ {0x00,0x41,0x22,0x1C,0x00},
+    /* 0x2A */ {0x14,0x08,0x3E,0x08,0x14}, /* 0x2B */ {0x08,0x08,0x3E,0x08,0x08},
+    /* 0x2C */ {0x00,0x50,0x30,0x00,0x00}, /* 0x2D */ {0x08,0x08,0x08,0x08,0x08},
+    /* 0x2E */ {0x00,0x60,0x60,0x00,0x00}, /* 0x2F */ {0x20,0x10,0x08,0x04,0x02},
+    /* 0x30 */ {0x3E,0x51,0x49,0x45,0x3E}, /* 0x31 */ {0x00,0x42,0x7F,0x40,0x00},
+    /* 0x32 */ {0x42,0x61,0x51,0x49,0x46}, /* 0x33 */ {0x21,0x41,0x45,0x4B,0x31},
+    /* 0x34 */ {0x18,0x14,0x12,0x7F,0x10}, /* 0x35 */ {0x27,0x45,0x45,0x45,0x39},
+    /* 0x36 */ {0x3C,0x4A,0x49,0x49,0x30}, /* 0x37 */ {0x01,0x71,0x09,0x05,0x03},
+    /* 0x38 */ {0x36,0x49,0x49,0x49,0x36}, /* 0x39 */ {0x06,0x49,0x49,0x29,0x1E},
+    /* 0x3A */ {0x00,0x36,0x36,0x00,0x00}, /* 0x3B */ {0x00,0x56,0x36,0x00,0x00},
+    /* 0x3C */ {0x00,0x08,0x14,0x22,0x41}, /* 0x3D */ {0x14,0x14,0x14,0x14,0x14},
+    /* 0x3E */ {0x41,0x22,0x14,0x08,0x00}, /* 0x3F */ {0x02,0x01,0x51,0x09,0x06},
+    /* 0x40 */ {0x32,0x49,0x79,0x41,0x3E}, /* 0x41 */ {0x7E,0x11,0x11,0x11,0x7E},
+    /* 0x42 */ {0x7F,0x49,0x49,0x49,0x36}, /* 0x43 */ {0x3E,0x41,0x41,0x41,0x22},
+    /* 0x44 */ {0x7F,0x41,0x41,0x22,0x1C}, /* 0x45 */ {0x7F,0x49,0x49,0x49,0x41},
+    /* 0x46 */ {0x7F,0x09,0x09,0x01,0x01}, /* 0x47 */ {0x3E,0x41,0x41,0x51,0x32},
+    /* 0x48 */ {0x7F,0x08,0x08,0x08,0x7F}, /* 0x49 */ {0x00,0x41,0x7F,0x41,0x00},
+    /* 0x4A */ {0x20,0x40,0x41,0x3F,0x01}, /* 0x4B */ {0x7F,0x08,0x14,0x22,0x41},
+    /* 0x4C */ {0x7F,0x40,0x40,0x40,0x40}, /* 0x4D */ {0x7F,0x02,0x04,0x02,0x7F},
+    /* 0x4E */ {0x7F,0x04,0x08,0x10,0x7F}, /* 0x4F */ {0x3E,0x41,0x41,0x41,0x3E},
+    /* 0x50 */ {0x7F,0x09,0x09,0x09,0x06}, /* 0x51 */ {0x3E,0x41,0x51,0x21,0x5E},
+    /* 0x52 */ {0x7F,0x09,0x19,0x29,0x46}, /* 0x53 */ {0x46,0x49,0x49,0x49,0x31},
+    /* 0x54 */ {0x01,0x01,0x7F,0x01,0x01}, /* 0x55 */ {0x3F,0x40,0x40,0x40,0x3F},
+    /* 0x56 */ {0x1F,0x20,0x40,0x20,0x1F}, /* 0x57 */ {0x7F,0x20,0x18,0x20,0x7F},
+    /* 0x58 */ {0x63,0x14,0x08,0x14,0x63}, /* 0x59 */ {0x03,0x04,0x78,0x04,0x03},
+    /* 0x5A */ {0x61,0x51,0x49,0x45,0x43}
+};
+
+/* 在 (page, col) 处画一个字符：一次 I2C 事务写 6 列 */
+void OLED_ShowChar(uint8_t page, uint8_t col, char ch)
+{
+    uint8_t buf[OLED_CHAR_W + 1];   /* 1 个控制字节 + 5 列字模 + 1 列空隙 */
+    uint8_t idx;
+
+    if (ch &gt;= &#39;a&#39; &amp;&amp; ch &lt;= &#39;z&#39;) ch = (char)(ch - 32);   /* 只做了一套大写 */
+    if (ch &lt; &#39; &#39; || ch &gt; &#39;Z&#39;) ch = &#39;?&#39;;
+    idx = (uint8_t)(ch - &#39; &#39;);
+
+    buf[0] = SSD1306_DATA;
+    memcpy(&amp;buf[1], s_font5x7[idx], OLED_FONT_W);
+    buf[OLED_CHAR_W] = 0x00;        /* 字符之间留 1 列空白 */
+    OLED_SetPos(page, col);
+    HAL_I2C_Master_Transmit(&amp;hi2c1, SSD1306_ADDR8, buf, sizeof(buf), SSD1306_I2C_TIMEOUT);
+}
+
+void OLED_ShowString(uint8_t page, uint8_t col, const char *str)
+{
+    while (*str != &#39;\0&#39; &amp;&amp; (uint16_t)(col + OLED_CHAR_W) &lt;= SSD1306_WIDTH) {
+        OLED_ShowChar(page, col, *str++);
+        col = (uint8_t)(col + OLED_CHAR_W);
+    }
+}
+
+/* 定长显示十进制数，例如 len=5 显示 &quot;00042&quot; */
+void OLED_ShowNum(uint8_t page, uint8_t col, uint32_t num, uint8_t len)
+{
+    char tmp[11];
+    if (len &gt; 10U) len = 10U;
+    for (uint8_t i = 0; i &lt; len; i++) {
+        tmp[len - 1U - i] = (char)(&#39;0&#39; + num % 10U);   /* 从最低位往前填 */
+        num /= 10U;
+    }
+    tmp[len] = &#39;\0&#39;;
+    OLED_ShowString(page, col, tmp);
+}
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/retarget.c</code></strong>（GCC / CubeIDE）</p>
+<pre><code class="language-c">#include &quot;usart.h&quot;
+#include &lt;stdio.h&gt;
+
+int _write(int file, char *ptr, int len)
+{
+    (void)file;
+    HAL_UART_Transmit(&amp;huart1, (uint8_t *)ptr, (uint16_t)len, HAL_MAX_DELAY);
+    return len;
+}
+</code></pre>
+<p><strong>文件：<code>App/Src/app_i2c.c</code></strong></p>
+<pre><code class="language-c">#include &quot;app_i2c.h&quot;
+#include &quot;i2c.h&quot;
+#include &quot;ssd1306.h&quot;
+#include &quot;ssd1306_text.h&quot;
+#include &lt;stdio.h&gt;
+
+static uint32_t s_count = 0;
+
+uint8_t App_I2CScan(void)
+{
+    uint8_t found = 0;
+    for (uint8_t a = 0x08U; a &lt;= 0x77U; a++) {
+        /* 7 位地址左移一位传给 HAL；试 3 次，每次超时 10ms */
+        if (HAL_I2C_IsDeviceReady(&amp;hi2c1, (uint16_t)(a &lt;&lt; 1), 3, 10) == HAL_OK) {
+            printf(&quot;I2C found: 0x%02X\r\n&quot;, a);
+            found++;
+        }
+    }
+    if (found == 0U) printf(&quot;I2C found: none\r\n&quot;);
+    return found;
+}
+
+void App_I2CInit(void)
+{
+    App_I2CScan();
+    OLED_Init();
+    OLED_ShowString(0, 0, &quot;STM32 I2C OK&quot;);
+    OLED_ShowString(2, 0, &quot;COUNT&quot;);
+    OLED_ShowString(4, 0, &quot;SPEED 100K&quot;);   /* CubeMX 里 I2C1 配 100kHz */
+    OLED_ShowNum(2, 48, 0, 5);
+}
+
+void App_I2CLoop(void)
+{
+    static uint32_t last = 0;
+    if (HAL_GetTick() - last &gt;= 1000U) {
+        last = HAL_GetTick();
+        s_count++;
+        OLED_ShowNum(2, 48, s_count, 5);   /* 只刷新变化的 5 个字符 */
+    }
+}
+</code></pre>
+<p><strong>文件：<code>Core/Inc/main.h</code></strong></p>
+<pre><code class="language-c">#ifndef __MAIN_H
+#define __MAIN_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;stm32f1xx_hal.h&quot;
+
+void Error_Handler(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __MAIN_H */
+</code></pre>
+<p><strong>文件：<code>Core/Src/main.c</code></strong></p>
+<pre><code class="language-c">#include &quot;main.h&quot;
+#include &quot;gpio.h&quot;
+#include &quot;i2c.h&quot;
+#include &quot;usart.h&quot;
+#include &quot;app_i2c.h&quot;
+#include &lt;stdio.h&gt;
+
+static void SystemClock_Config(void);
+
+int main(void)
+{
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_I2C1_Init();          /* 100kHz，PB6=SCL、PB7=SDA 复用开漏 */
+  MX_USART1_UART_Init();   /* 115200-8-N-1，打印扫描结果 */
+
+  /* USER CODE BEGIN 2 */
+  App_I2CInit();           /* 扫描 → OLED 初始化 → 画静态文字 */
+  /* USER CODE END 2 */
+
+  while (1)
+  {
+    App_I2CLoop();         /* 每秒把计数刷新到屏上 */
+    HAL_Delay(10);
+  }
+}
+
+static void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef osc = {0};
+  RCC_ClkInitTypeDef clk = {0};
+
+  /* HSE 8MHz × 9 = 72MHz；APB1 = 36MHz（I2C1 挂在这里），APB2 = 72MHz */
+  osc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  osc.HSEState = RCC_HSE_ON;
+  osc.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  osc.PLL.PLLState = RCC_PLL_ON;
+  osc.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  osc.PLL.PLLMUL = RCC_PLL_MUL9;
+  if (HAL_RCC_OscConfig(&amp;osc) != HAL_OK) Error_Handler();
+
+  clk.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                  RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  clk.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  clk.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  clk.APB1CLKDivider = RCC_HCLK_DIV2;
+  clk.APB2CLKDivider = RCC_HCLK_DIV1;
+  if (HAL_RCC_ClockConfig(&amp;clk, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
+}
+
+void Error_Handler(void)
+{
+  __disable_irq();
+  while (1) { }
+}
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">这个项目里哪些代码是 CubeMX 生成的</h3><ul>
+<li><code>MX_I2C1_Init()</code>（在 <code>i2c.c</code>）：I2C 模式、Clock Speed = <strong>100000</strong>（100kHz）、7 位地址、自身地址 0。I2C1 挂 APB1 = 36MHz，CubeMX 据此算分频。</li>
+<li><code>HAL_I2C_MspInit()</code>（在 <code>i2c.c</code>）：开 I2C1 时钟，PB6/PB7 配 <strong>复用开漏 + 上拉</strong>。配成推挽的典型现象是第一个字节就 NACK。</li>
+<li><code>MX_USART1_UART_Init()</code> / <code>retarget.c</code>：只用来把扫描结果打印到电脑；OLED 才是主显示。</li>
+<li><code>SystemClock_Config()</code>：决定 PCLK1 = 36MHz，也决定 I2C 的实际速率；改主频后要重新核对 CubeMX 里的 100kHz。</li>
+</ul>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么扫描用硬件 I2C、界面用轮询</h3><ul>
+<li>扫描只是&quot;试一下这个地址有没有 ACK&quot;，<code>HAL_I2C_IsDeviceReady</code> 一次几十微秒，阻塞完全无所谓，代码最短。</li>
+<li>刷新 OLED 每秒只发生一次（计数变化），轮询也不会挡住别的任务；真正需要&quot;不卡&quot;的场合才上 DMA/中断。</li>
+<li>全程没有中断里碰 I2C：中断里做 I2C 传输一旦总线被拉死，整个系统会跟着卡住。</li>
+</ul>
+</section></section>
+<hr>
+<h2 id="sec-9">9. 本课小结</h2>
+<ul>
+<li>I2C 两根线：<strong>SCL 时钟 + SDA 数据</strong>，一主多从，靠地址区分。</li>
+<li>所有设备<strong>必须开漏 + 外部上拉</strong>；推挽会在&quot;一个送高一个送低&quot;时短路烧芯片。</li>
+<li>起始 = SCL 高时 SDA 下降；停止 = SCL 高时 SDA 上升；数据只能在 SCL 低时变。</li>
+<li>第 9 个时钟是 <strong>ACK</strong>（接收方拉低）；读最后一个字节主机回 <strong>NACK</strong>。</li>
+<li>地址是 <strong>7 位</strong>，发送时 <code>addr &lt;&lt; 1 | R/W</code>；0x3C 写是 0x78、读是 0x79，<strong>别混用 7 位和 8 位</strong>。</li>
+<li>读寄存器 = 先写寄存器地址，再用<strong>重复起始</strong>读。</li>
+<li>OLED 用 SSD1306：显存 8 页 × 128 列，<strong>一字节管一列 8 个像素</strong>；控制字节 0x00 命令、0x40 数据。</li>
+<li>F103 硬件 I2C 有 BUSY 死锁勘误，学习阶段用<strong>软件 I2C</strong> 更稳。</li>
+<li>100kHz 全屏刷 OLED 要 92ms，所以只刷变化区域。</li>
+</ul>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能解释 I2C 为什么必须开漏，以及推挽会烧芯片的原因</li>
+<li><input disabled="" type="checkbox"> 我能画出起始、数据、ACK、停止的 SCL/SDA 关系</li>
+<li><input disabled="" type="checkbox"> 我能由 7 位地址算出读写字节</li>
+<li><input disabled="" type="checkbox"> 我能写出&quot;写寄存器&quot;和&quot;读寄存器&quot;的完整字节序列</li>
+<li><input disabled="" type="checkbox"> 我知道 OLED 一字节对应 8 个纵向像素</li>
+<li><input disabled="" type="checkbox"> 我能说出软件 I2C 和硬件 I2C 的取舍</li>
+<li><input disabled="" type="checkbox"> 我能按&quot;上拉 → 地址 → 接线&quot;的顺序排查 NACK</li>
+</ul>
+</section>
+<hr>
+<h2 id="sec-10">10. 下一课预告</h2>
+<p>I2C 用两根线换来了&quot;多设备&quot;，代价是<strong>慢</strong>：100kHz、半双工、每个字节都要 ACK。</p>
+<p>下一课 <code>s14 SPI 总线</code>：四根线，全双工，动辄 10MHz 以上——OLED 刷视频、Flash 存字库、屏幕刷图都靠它。你会看到&quot;用线换速度&quot;这个工程取舍。</p>
+
+  
+<nav class="pager">
+  <a class="prev" href="12-uart.html">← 串口 UART：帧格式、波特率与 printf 重定向</a>
+  <a class="next" href="14-spi.html">SPI 总线：四种模式与外设选型 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

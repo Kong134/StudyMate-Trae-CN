@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>组合逻辑电路的分析与设计 · 数字电子技术</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">数字电子技术</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">concept</span>
+    <span class="badge ghost">80 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">先说结论</a></li><li><a href="#sec-1">组合逻辑的分析与设计</a></li><li><a href="#sec-2">编码器与译码器</a></li><li><a href="#sec-3">数据选择器：用地址选数据</a></li><li><a href="#sec-4">加法器：从半加到全加</a></li><li><a href="#sec-5">竞争冒险</a></li><li><a href="#sec-6">练习</a></li></ol></nav>
+  <h2 id="sec-0">先说结论</h2>
+<p>组合逻辑电路的输出<strong>只由当前输入决定</strong>，没有记忆、没有时钟。给它一组输入，它立刻（经过一段门延迟）给出一组输出。编码器、译码器、数据选择器、加法器，都是这一类。</p>
+<p>分析组合电路是&quot;从图到功能&quot;：写表达式、列真值表、看出它在干什么。设计是反方向：列真值表、化简、画门电路。真正需要动脑的是最后一步——<strong>同一张真值表可以有多种实现，选哪种取决于芯片、速度和布线</strong>。</p>
+
+<section class="callout goal"><h3 class="callout-title">本课目标</h3><p>能读懂 74LS148/138/151 的功能表，能用数据选择器实现逻辑函数，能画出全加器并解释进位，能识别竞争冒险并说出消除办法。</p>
+</section>
+<h2 id="sec-1">组合逻辑的分析与设计</h2>
+<p>分析四步：从输入到输出逐级写表达式；代入所有输入组合列真值表；用卡诺图或公式化简；用一句话说出功能（&quot;这是多数表决器&quot;而不是&quot;这是三个与门&quot;）。</p>
+<p>设计四步正好相反：把需求写成真值表；填卡诺图化出最简与或式；选择门电路形式（与或、与非-与非、或非-或非）；检查扇出和延迟。</p>
+
+<section class="callout key"><h3 class="callout-title">组合逻辑的边界</h3><p>只要电路里出现反馈（输出接回输入）、或者输出会随时间的推移自己变化，它就不是纯组合逻辑了。锁存器、触发器、计数器都属于时序电路，下一课再讲。</p>
+</section>
+<h2 id="sec-2">编码器与译码器</h2>
+<p>编码器把&quot;哪条线有效&quot;变成二进制码。74LS148 是 8 线到 3 线<strong>优先编码器</strong>：输入 I0 到 I7 低电平有效，编号越大优先级越高，输出 A2A1A0 是有效输入中编号最大的那个的反码，同时给 GS、EO 信号表示&quot;有没有输入&quot;。优先的意义在于：多个输入同时有效时，电路只认优先级最高的，不会输出一个无意义的组合。</p>
+<p>译码器反过来：n 位输入选出 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mi>n</mi></msup></mrow><annotation encoding="application/x-tex">2^n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6644em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span></span></span></span></span></span></span></span> 条输出中的一条。74LS138 是 3 线到 8 线译码器，输出 Y0 到 Y7 <strong>低电平有效</strong>，另有三个使能端（G1 高有效，G2A、G2B 低有效），只有使能条件满足时才译码。输入 A2A1A0=101 时，只有 Y5 为低，其余为高。</p>
+<table>
+<thead>
+<tr>
+<th>型号</th>
+<th>功能</th>
+<th>关键点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>74LS148</td>
+<td>8 线–3 线优先编码器</td>
+<td>输入、输出均低有效，可级联扩到 16 线</td>
+</tr>
+<tr>
+<td>74LS138</td>
+<td>3 线–8 线译码器</td>
+<td>输出低有效，三个使能端可做片选</td>
+</tr>
+<tr>
+<td>74LS151</td>
+<td>8 选 1 数据选择器</td>
+<td>地址 A2A1A0 选一路，带互补输出</td>
+</tr>
+<tr>
+<td>74LS283</td>
+<td>4 位超前进位加法器</td>
+<td>进位不逐级传，速度快</td>
+</tr>
+</tbody></table>
+<p>译码器最常用的场景不是&quot;译码&quot;，而是<strong>片选</strong>：用高位地址驱动 138，Y0 到 Y7 分别接 8 片存储器的片选端，一次只选中一片。这就是第八章地址译码的雏形。</p>
+<h2 id="sec-3">数据选择器：用地址选数据</h2>
+<p>数据选择器（MUX）是一个&quot;多路开关&quot;：地址端给几号，输出就接几号数据端。74LS151 有 8 个数据输入 D0 到 D7、3 个地址输入 A2A1A0、一个使能端，输出 Y 和互补输出 W。</p>
+<p>它有一个非常好用的副产品：<strong>用 MUX 实现任意逻辑函数</strong>。把函数的输入变量接到地址端，把每个最小项对应的数据端接 0 或 1，MUX 就变成一张&quot;硬件真值表&quot;。比如三变量函数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo>=</mo><mo>∑</mo><mi>m</mi><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>3</mn><mo separator="true">,</mo><mn>5</mn><mo separator="true">,</mo><mn>7</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">F=\sum m(1,3,5,7)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">3</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">7</span><span class="mclose">)</span></span></span></span>，地址接 A、B、C，则 D1、D3、D5、D7 接 1，其余接 0。因为 1、3、5、7 都是 C=1，这个函数其实等于 C，一根线就能代替整个 MUX——所以先化简再实现，能省很多器件。</p>
+
+<section class="callout example"><h3 class="callout-title">例子：MUX 当函数发生器</h3><p>四变量函数有 16 个最小项，8 选 1 的 MUX 只有 8 个数据端。做法是把最低位 D 接地址之外的变量，数据端接 0、1、D 或 D&#39;。这相当于用&quot;剩余变量&quot;预先算出每一组的高三位对应的输出，是考试里的常见技巧。</p>
+</section>
+<h2 id="sec-4">加法器：从半加到全加</h2>
+<p>半加器只加两个 1 位：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>=</mo><mi>A</mi><mo>⊕</mo><mi>B</mi></mrow><annotation encoding="application/x-tex">S=A\oplus B</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span></span></span></span>，进位 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mo>=</mo><mi>A</mi><mi>B</mi></mrow><annotation encoding="application/x-tex">C=AB</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span></span></span></span>。全加器要加三个 1 位：A、B 和低位进位 Cin。它的输出是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>=</mo><mi>A</mi><mo>⊕</mo><mi>B</mi><mo>⊕</mo><msub><mi>C</mi><mrow><mi>i</mi><mi>n</mi></mrow></msub></mrow><annotation encoding="application/x-tex">S=A\oplus B\oplus C_{in}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">in</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，进位 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>C</mi><mrow><mi>o</mi><mi>u</mi><mi>t</mi></mrow></msub><mo>=</mo><mi>A</mi><mi>B</mi><mo>+</mo><msub><mi>C</mi><mrow><mi>i</mi><mi>n</mi></mrow></msub><mo stretchy="false">(</mo><mi>A</mi><mo>⊕</mo><mi>B</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">C_{out}=AB+C_{in}(A\oplus B)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">in</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mclose">)</span></span></span></span>。这个进位式也可以理解成&quot;三个输入里至少有两个 1&quot;——多数表决。</p>
+<svg class="diagram" viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="用两个半加器和一个或门组成全加器">
+  <g font-family="-apple-system, 'Microsoft YaHei', sans-serif" font-size="13">
+    <text class="label" x="8" y="22">全加器 = 两个半加器 + 一个或门：S = A⊕B⊕Cin，Cout = AB + Cin(A⊕B)</text>
+    <text class="label" x="30" y="124">A</text>
+    <text class="label" x="30" y="184">B</text>
+    <text class="label" x="24" y="304">Cin</text>
+    <path class="arrow" d="M50 120H120"/>
+    <path class="arrow" d="M50 180H120"/>
+    <path class="arrow" d="M60 300H340"/>
+    <path class="arrow" d="M340 300V280"/>
+    <path class="arrow" d="M340 280H360"/>
+    <rect class="box acc" x="120" y="100" width="150" height="80" rx="6"/>
+    <text class="label" x="195" y="128" text-anchor="middle">半加器 HA1</text>
+    <text class="sub" x="195" y="150" font-size="10.5" text-anchor="middle">S1 = A⊕B</text>
+    <text class="sub" x="195" y="168" font-size="10.5" text-anchor="middle">C1 = AB</text>
+    <path class="arrow" d="M270 130H320"/>
+    <path class="arrow" d="M320 130V240"/>
+    <path class="arrow" d="M320 240H360"/>
+    <path class="arrow" d="M270 165H550"/>
+    <path class="arrow" d="M550 165V340"/>
+    <path class="arrow" d="M550 340H580"/>
+    <rect class="box acc" x="360" y="220" width="150" height="80" rx="6"/>
+    <text class="label" x="435" y="248" text-anchor="middle">半加器 HA2</text>
+    <text class="sub" x="435" y="270" font-size="10.5" text-anchor="middle">S = S1⊕Cin</text>
+    <text class="sub" x="435" y="288" font-size="10.5" text-anchor="middle">C2 = S1·Cin</text>
+    <path class="arrow" d="M510 240H690"/>
+    <path class="arrowhead" d="M690 240l-7-4v8z"/>
+    <text class="label" x="698" y="244">S</text>
+    <path class="arrow" d="M510 280H565"/>
+    <path class="arrow" d="M565 280V320"/>
+    <path class="arrow" d="M565 320H580"/>
+    <rect class="box" x="580" y="300" width="100" height="60" rx="6"/>
+    <text class="label" x="630" y="326" text-anchor="middle">或门</text>
+    <text class="sub" x="630" y="346" font-size="10.5" text-anchor="middle">Cout = C1+C2</text>
+    <path class="arrow" d="M680 330H735"/>
+    <path class="arrowhead" d="M735 330l-7-4v8z"/>
+    <text class="label" x="700" y="320">Cout</text>
+    <path class="arrowhead" d="M120 120l-7-4v8z"/>
+    <path class="arrowhead" d="M120 180l-7-4v8z"/>
+    <path class="arrowhead" d="M360 280l-7-4v8z"/>
+    <path class="arrowhead" d="M360 240l-7-4v8z"/>
+    <path class="arrowhead" d="M580 340l-7-4v8z"/>
+    <path class="arrowhead" d="M580 320l-7-4v8z"/>
+    <text class="sub" x="8" y="378" font-size="11.5">S1 和 Cin 再半加一次得到本位和 S；两个半加器的进位 C1、C2 或起来就是向高位的进位</text>
+  </g>
+</svg>
+
+<p>多位加法有两种组织方式。<strong>串行进位</strong>把 4 个全加器首尾相接，低位的 Cout 接高位的 Cin；结构简单，但最高位要等进位一级级传上来，4 位就要等 4 级门延迟。<strong>超前进位</strong>（74LS283）用额外的逻辑同时算出每一位的进位，速度快但门数多。位数越多，串行进位的延迟越不可接受，这是&quot;用面积换速度&quot;的典型例子。</p>
+<h2 id="sec-5">竞争冒险</h2>
+<p>理想情况下，输入变化时输出应该按真值表一步到位；实际电路中，不同路径的门延迟不同，输出可能先冒出一个窄脉冲，再回到正确值，这就是<strong>竞争冒险</strong>。</p>
+<p>最典型的是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo>=</mo><mi>A</mi><mi>B</mi><mo>+</mo><msup><mi>A</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mi>C</mi></mrow><annotation encoding="application/x-tex">F=AB+A&#x27;C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span></span></span></span>。当 B=C=1 时，理论上 F 恒为 1（A=1 时靠 AB，A=0 时靠 A&#39;C）。但 A 从 1 变 0 时，A&#39; 要经过一个反相器才变 1，在这段延迟里 AB 已经变 0、A&#39;C 还没变 1，输出会短暂掉到 0——这叫<strong>静态 1 冒险</strong>（稳态是 1，却出现 0 毛刺）。</p>
+<p>消除办法有三类：</p>
+<ul>
+<li><strong>加冗余项</strong>：把卡诺图上两个相切的圈&quot;搭桥&quot;，加一项 BC。B=C=1 时 BC 恒为 1，毛刺被盖住。</li>
+<li><strong>加选通/采样</strong>：等信号稳定后再用时钟采样，毛刺不进下一级。</li>
+<li><strong>加滤波电容</strong>：用很小的 RC 把窄脉冲滤掉，但会拖慢边沿，只适合慢速电路。</li>
+</ul>
+
+<section class="callout warn"><h3 class="callout-title">冗余项的两面性</h3><p>第二章说 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>B</mi><mo>+</mo><msup><mi>A</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mi>C</mi><mo>+</mo><mi>B</mi><mi>C</mi></mrow><annotation encoding="application/x-tex">AB+A&#x27;C+BC</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8352em;vertical-align:-0.0833em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">BC</span></span></span></span> 里的 BC 是冗余项、可以删；这里又说要加回去。矛盾吗？不矛盾——化简的目标是&quot;门最少&quot;，消除冒险的目标是&quot;输出干净&quot;。功能上它是冗余的，时序上它是必需的。什么时候加，取决于下游电路对毛刺是否敏感。</p>
+</section>
+<h2 id="sec-6">练习</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：全加器的值</h3><p>A=1、B=1、Cin=0，全加器的 S 和 Cout 分别是多少？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>=</mo><mn>1</mn><mo>⊕</mo><mn>1</mn><mo>⊕</mo><mn>0</mn><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">S=1\oplus1\oplus0=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>C</mi><mrow><mi>o</mi><mi>u</mi><mi>t</mi></mrow></msub><mo>=</mo><mn>1</mn><mo>⋅</mo><mn>1</mn><mo>+</mo><mn>0</mn><mo>⋅</mo><mo stretchy="false">(</mo><mn>1</mn><mo>⊕</mo><mn>1</mn><mo stretchy="false">)</mo><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">C_{out}=1\cdot1+0\cdot(1\oplus1)=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>。</p>
+<p>也就是 1+1=2，本位 0、向高位进 1，完全符合二进制加法。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：译码器输出</h3><p>74LS138 的 A2A1A0=101，使能条件满足，哪一路输出为低？其余各路是什么？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>输入 101 对应十进制 5，所以 <strong>Y5 为低电平</strong>，Y0 到 Y4、Y6、Y7 都是高电平。</p>
+<p>注意 138 的输出是低有效：被选中的那一路是 0，不是 1。写片选时要把这个极性记住。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 3：用 MUX 实现函数</h3><p>用 74LS151 实现 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo stretchy="false">(</mo><mi>A</mi><mo separator="true">,</mo><mi>B</mi><mo separator="true">,</mo><mi>C</mi><mo stretchy="false">)</mo><mo>=</mo><mo>∑</mo><mi>m</mi><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>3</mn><mo separator="true">,</mo><mn>5</mn><mo separator="true">,</mo><mn>7</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">F(A,B,C)=\sum m(1,3,5,7)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">3</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">7</span><span class="mclose">)</span></span></span></span>，地址端接 A2=A、A1=B、A0=C。各数据端怎么接？这个函数还能怎么简化？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>最小项 1、3、5、7 对应数据端 D1、D3、D5、D7 接 1，D0、D2、D4、D6 接 0。</p>
+<p>因为 1、3、5、7 的二进制都是 C=1，所以 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo>=</mo><mi>C</mi></mrow><annotation encoding="application/x-tex">F=C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span></span></span></span>，直接用一根 C 线就能实现，不必用 MUX。这个例子说明：先化简，常常能省掉整片芯片。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 4：找出冒险并消除</h3><p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo>=</mo><mi>A</mi><mi>B</mi><mo>+</mo><msup><mi>A</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mi>C</mi></mrow><annotation encoding="application/x-tex">F=AB+A&#x27;C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span></span></span></span>，B=C=1。A 从 1 变 0 时会出现什么现象？怎么用一项逻辑消除？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>理论输出应恒为 1：A=1 时 AB=1，A=0 时 A&#39;C=1。但 A&#39; 经过反相器有延迟，在切换瞬间两项都可能为 0，输出出现一个向下的窄脉冲，即静态 1 冒险。</p>
+<p>加冗余项 BC：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo>=</mo><mi>A</mi><mi>B</mi><mo>+</mo><msup><mi>A</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mi>C</mi><mo>+</mo><mi>B</mi><mi>C</mi></mrow><annotation encoding="application/x-tex">F=AB+A&#x27;C+BC</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8352em;vertical-align:-0.0833em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">BC</span></span></span></span>。B=C=1 时 BC 恒为 1，不管 A 怎么变，输出都被这一项拉住。功能不变，毛刺消失。</p>
+</div></details></section>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能说出组合逻辑&quot;无记忆&quot;的含义，并按四步分析一个电路</li>
+<li><input disabled="" type="checkbox"> 我知道 74LS138 输出低有效，输入 101 时只有 Y5 为低</li>
+<li><input disabled="" type="checkbox"> 我能用 MUX 的地址端接变量、数据端接 0/1 来实现函数</li>
+<li><input disabled="" type="checkbox"> 我能写出半加器和全加器的 S、Cout 表达式</li>
+<li><input disabled="" type="checkbox"> 我能解释静态 1 冒险的成因，并用冗余项消除</li>
+</ul>
+</section>
+
+  
+<nav class="pager">
+  <a class="prev" href="03-logic-gates.html">← 逻辑门与电平特性</a>
+  <a class="next" href="05-flip-flops.html">触发器 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

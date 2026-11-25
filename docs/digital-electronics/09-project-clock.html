@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>项目：用 74 系列芯片搭一个 60 进制秒计数器 · 数字电子技术</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">数字电子技术</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">project</span>
+    <span class="badge ghost">120 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">先说结论</a></li><li><a href="#sec-1">需求与验收标准</a></li><li><a href="#sec-2">器件清单与关键引脚</a></li><li><a href="#sec-3">连线思路：个位 10、十位 6、级联进位</a></li><li><a href="#sec-4">显示译码与限流</a></li><li><a href="#sec-5">调试步骤与常见故障</a></li><li><a href="#sec-6">练习</a></li></ol></nav>
+  <h2 id="sec-0">先说结论</h2>
+<p>这个项目把前面八课串起来：<strong>1Hz 时钟 → 个位模 10 计数 → 十位模 6 计数 → 74LS48 译码 → 数码管显示 00–59</strong>，到 59 后回 00，并给下一级一个分脉冲。核心是三件事：个位与十位怎么级联、十位怎么在 5 之后回 0、进位脉冲从哪一刻产生。</p>
+<p>用两片 74160 就够了：个位让它自然数十个状态（0–9），十位用反馈置数改成六个状态（0–5）。两片共用同一个 1Hz 时钟，个位的 RCO 控制十位使能，这样十位只在个位 9→0 的那一拍加 1，不会出现&quot;十位抢跑&quot;。</p>
+
+<section class="callout goal"><h3 class="callout-title">项目目标</h3><p>独立完成选片、连线、译码显示与分级调试，做出一个 00–59 循环、可手动复位、进位可靠的秒计数器，并能用示波器或 LED 定位故障。</p>
+</section>
+<h2 id="sec-1">需求与验收标准</h2>
+<p>先想清楚验收标准，否则调试时没有判断依据：</p>
+<ul>
+<li>上电或按复位后显示 <code>00</code>，每来一个 1Hz 脉冲加 1。</li>
+<li>显示范围严格是 <code>00</code> 到 <code>59</code>；到 <code>59</code> 后下一个脉冲回 <code>00</code>，同时产生一个分进位脉冲。</li>
+<li>十位永远不出现 6、7、8、9；个位永远是 0–9。</li>
+<li>手动复位任何时刻有效，复位后立即回 <code>00</code>。</li>
+<li>数码管亮度均匀，段与段之间没有&quot;鬼影&quot;；5V 电源电流在正常范围，芯片不烫。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>验收项</th>
+<th>通过标准</th>
+<th>怎么测</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>个位计数</td>
+<td>0–9 循环，每个脉冲加 1</td>
+<td>个位单独接 1Hz，观察 10 秒</td>
+</tr>
+<tr>
+<td>十位模 6</td>
+<td>0–5 循环，第 6 个脉冲回 0</td>
+<td>把 LD&#39; 检测项里的个位 RCO 临时接 1，再手动给脉冲</td>
+</tr>
+<tr>
+<td>级联</td>
+<td>09→10，59→00</td>
+<td>连续观察两个完整周期</td>
+</tr>
+<tr>
+<td>分脉冲</td>
+<td>59→00 时输出一个脉冲</td>
+<td>脉冲接 LED 或示波器</td>
+</tr>
+<tr>
+<td>复位</td>
+<td>任意时刻回 00</td>
+<td>随机按复位键</td>
+</tr>
+<tr>
+<td>显示</td>
+<td>数字与 BCD 输入一致，无缺段</td>
+<td>逐段检查 a–g</td>
+</tr>
+</tbody></table>
+
+<section class="callout warn"><h3 class="callout-title">先定&quot;高有效还是低有效&quot;</h3><p>74160 的 CLR&#39;、LD&#39; 是低有效；7448 的输出是高有效（共阴）；7447 的输出是低有效（共阳）。接线前把每个引脚的极性写在纸上，比接完再猜快十倍。复位键如果接成常闭，上电就一直清零，表现是&quot;数字不动&quot;。</p>
+</section>
+<h2 id="sec-2">器件清单与关键引脚</h2>
+<table>
+<thead>
+<tr>
+<th>器件</th>
+<th>数量</th>
+<th>作用</th>
+<th>关键引脚</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>74160</td>
+<td>2</td>
+<td>十进制同步计数器</td>
+<td>CLK、CLR&#39;、LD&#39;、ENT、ENP、RCO、QA–QD</td>
+</tr>
+<tr>
+<td>7448</td>
+<td>2</td>
+<td>BCD 到七段译码，共阴</td>
+<td>A–D 输入，a–g 输出，LT&#39;、RBI&#39;、BI&#39;</td>
+</tr>
+<tr>
+<td>共阴数码管</td>
+<td>2</td>
+<td>显示十位/个位</td>
+<td>公共端接 GND，a–g 各串 330Ω</td>
+</tr>
+<tr>
+<td>74LS00</td>
+<td>1</td>
+<td>四与非门，做反馈和进位</td>
+<td>用于 LD&#39; 与分脉冲</td>
+</tr>
+<tr>
+<td>1Hz 时钟源</td>
+<td>1</td>
+<td>秒脉冲</td>
+<td>555 或晶振分频，输出 5V 方波</td>
+</tr>
+<tr>
+<td>电阻</td>
+<td>14</td>
+<td>段限流</td>
+<td>每段 330Ω</td>
+</tr>
+<tr>
+<td>电容</td>
+<td>若干</td>
+<td>电源去耦</td>
+<td>每片 IC 旁 0.1μF</td>
+</tr>
+</tbody></table>
+<p>74160 的功能要点：ENT、ENP 都接高时才计数；RCO 在计数值为 9 且 ENT 为高时输出高，正好可以当&quot;进位&quot;用；LD&#39; 低电平时，下一个时钟沿把 D3–D0 装入，<strong>这一步与 ENT、ENP 无关</strong>（置数优先于计数使能）；CLR&#39; 低电平时异步清零，不需要时钟。做模 6 时优先用 LD&#39;（同步），避免 CLR&#39; 的毛刺；但级联时要注意置数不受使能门控，检测项必须把&quot;这一拍真的该进位&quot;的条件一起包含进去。</p>
+
+<section class="callout note"><h3 class="callout-title">为什么不用 74161</h3><p>74161 是二进制计数器，做到 5 之后要额外检测 0110 才能回 0，逻辑更绕；74160 本身就是 BCD，输出的 QA–QD 直接对应十进制位，接 7448 不用转换。秒计数器优先选 74160。</p>
+</section>
+<h2 id="sec-3">连线思路：个位 10、十位 6、级联进位</h2>
+<p><strong>第一步，时钟与使能。</strong> 1Hz 方波同时接两片 74160 的 CLK；两片的 ENT、ENP 接高，CLR&#39;、LD&#39; 先接高（暂时不反馈）。个位这时就会自然数十个状态 0–9，数到 9 后回 0。</p>
+<p><strong>第二步，个位到十位的级联。</strong> 个位的 RCO 接十位的 ENT（和 ENP）。RCO 在个位为 9 时为高，所以第 10 个脉冲到来时，个位 9→0，十位同时加 1。两片共用时钟，这是同步级联；不要用&quot;个位 RCO 接十位 CLK&quot;的异步接法，否则十位会在个位 9 期间提前动作，还会引入延迟。</p>
+<p><strong>第三步，十位做成模 6。</strong> 十位要显示 0–5，共 6 个状态，用同步置数：让 LD&#39;=0，D3–D0 接 <code>0000</code>，下一个时钟沿把 0 装入。问题是怎么译出这个 LD&#39;。</p>
+<p>检测项不能只盯十位的 5：74160 的置数不受 ENT/ENP 门控，只要 LD&#39;=0，下一个时钟沿一定装载。十位一到 5（显示 50），紧接着 51 那一拍的时钟沿就会把它装成 0，显示从 50 直接跳到 01。必须把&quot;这一拍确实在进位&quot;的条件（个位为 9、RCO 为高）一起并入：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>L</mi><msup><mi>D</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>=</mo><mo stretchy="false">(</mo><msub><mi>Q</mi><mn>2</mn></msub><mo>⋅</mo><msub><mi>Q</mi><mn>0</mn></msub><mo>⋅</mo><mi>R</mi><mi>C</mi><msub><mi>O</mi><mtext>个位</mtext></msub><msup><mo stretchy="false">)</mo><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><annotation encoding="application/x-tex">LD&#x27; = (Q_2 \cdot Q_0 \cdot RCO_{个位})&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8019em;"></span><span class="mord mathnormal">L</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8019em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0519em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">RC</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord cjk_fallback mtight">个位</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8019em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p>这样只有 59 时 LD&#39; 才为 0，59→00 的那一拍十位装 0，十位序列是 0→1→…→5→0，共 6 个状态，永远不会出现 6。用 74LS00 实现：第 1 个门得 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>Q</mi><mn>2</mn></msub><msub><mi>Q</mi><mn>0</mn></msub><msup><mo stretchy="false">)</mo><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><annotation encoding="application/x-tex">(Q_2Q_0)&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span>，第 2 个门把它反相成 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Q</mi><mn>2</mn></msub><msub><mi>Q</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">Q_2Q_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，第 3 个门与 $RCO_{个位}$ 相与非得到 LD&#39;；第 4 个门再取反，正好得到分脉冲 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mrow><mi>m</mi><mi>i</mi><mi>n</mi></mrow></msub></mrow><annotation encoding="application/x-tex">P_{min}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>。</p>
+<p><strong>第四步，分进位脉冲。</strong> 什么时候该给&quot;分&quot;加 1？显示 <code>59</code> 的那一秒结束时。也就是个位为 9（RCO=1）且十位为 5（Q2=Q0=1）时。分脉冲：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>P</mi><mrow><mi>m</mi><mi>i</mi><mi>n</mi></mrow></msub><mo>=</mo><mi>R</mi><mi>C</mi><msub><mi>O</mi><mtext>个位</mtext></msub><mo>⋅</mo><msub><mi>Q</mi><mrow><mn>2</mn><mo separator="true">,</mo><mtext>十位</mtext></mrow></msub><mo>⋅</mo><msub><mi>Q</mi><mrow><mn>0</mn><mo separator="true">,</mo><mtext>十位</mtext></mrow></msub></mrow><annotation encoding="application/x-tex">P_{min} = RCO_{个位} \cdot Q_{2,十位} \cdot Q_{0,十位}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">RC</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord cjk_fallback mtight">个位</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mpunct mtight">,</span><span class="mord cjk_fallback mtight">十位</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">0</span><span class="mpunct mtight">,</span><span class="mord cjk_fallback mtight">十位</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p>这个脉冲在 59 状态期间一直为高，到 00 的那一拍结束。如果下一级也是 74160，把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mrow><mi>m</mi><mi>i</mi><mi>n</mi></mrow></msub></mrow><annotation encoding="application/x-tex">P_{min}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 接它的 ENT（ENP 接高），并共用 1Hz 时钟；如果下一级用上升沿计数，则要把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mrow><mi>m</mi><mi>i</mi><mi>n</mi></mrow></msub></mrow><annotation encoding="application/x-tex">P_{min}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 取反或加边沿检测，避免高电平期间重复计数。</p>
+<svg class="diagram" viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="60 进制秒计数器框图：1Hz 时钟、个位 74160、十位 74160、反馈置数逻辑、7448 译码与数码管、分脉冲输出">
+  <g font-family="-apple-system, 'Microsoft YaHei', sans-serif" font-size="13">
+    <text class="label" x="8" y="22">60 进制秒计数器：个位模 10、十位模 6，共用 1Hz 时钟，59 时产生分脉冲</text>
+    <rect class="box acc" x="20" y="130" width="90" height="60" rx="6"/>
+    <text class="label" x="65" y="156" text-anchor="middle">1Hz</text>
+    <text class="sub" x="65" y="176" font-size="10.5" text-anchor="middle">方波时钟</text>
+    <rect class="box" x="150" y="120" width="130" height="80" rx="6"/>
+    <text class="label" x="215" y="148" text-anchor="middle">个位 74160</text>
+    <text class="sub" x="215" y="170" font-size="10.5" text-anchor="middle">模 10：0–9</text>
+    <text class="sub" x="215" y="188" font-size="10.5" text-anchor="middle">RCO 在 9 时为高</text>
+    <rect class="box" x="340" y="120" width="130" height="80" rx="6"/>
+    <text class="label" x="405" y="148" text-anchor="middle">十位 74160</text>
+    <text class="sub" x="405" y="170" font-size="10.5" text-anchor="middle">模 6：0–5</text>
+    <text class="sub" x="405" y="188" font-size="10.5" text-anchor="middle">LD'=(Q2·Q0·RCO)'</text>
+    <rect class="box" x="500" y="250" width="190" height="70" rx="6"/>
+    <text class="label" x="595" y="276" text-anchor="middle">反馈置数逻辑</text>
+    <text class="sub" x="595" y="296" font-size="10.5" text-anchor="middle">59 时 LD'=0 → 下一拍装 0</text>
+    <rect class="box" x="150" y="250" width="130" height="70" rx="6"/>
+    <text class="label" x="215" y="276" text-anchor="middle">7448 + 数码管</text>
+    <text class="sub" x="215" y="296" font-size="10.5" text-anchor="middle">个位显示 0–9</text>
+    <rect class="box" x="340" y="250" width="130" height="70" rx="6"/>
+    <text class="label" x="405" y="276" text-anchor="middle">7448 + 数码管</text>
+    <text class="sub" x="405" y="296" font-size="10.5" text-anchor="middle">十位显示 0–5</text>
+    <path class="arrow" d="M110 160H150"/>
+    <path class="arrowhead" d="M150 160l-7-4v8z"/>
+    <path class="arrow" d="M280 145H340"/>
+    <path class="arrowhead" d="M340 145l-7-4v8z"/>
+    <text class="sub" x="284" y="136" font-size="10.5">RCO→ENT</text>
+    <path class="arrow" d="M470 145H530"/>
+    <path class="arrowhead" d="M530 145l-7-4v8z"/>
+    <text class="label" x="536" y="140">分脉冲</text>
+    <path class="arrow" d="M215 200V250"/>
+    <path class="arrowhead" d="M215 250l-4-7h8z"/>
+    <text class="sub" x="220" y="228" font-size="10.5">QA–QD</text>
+    <path class="arrow" d="M405 200V250"/>
+    <path class="arrowhead" d="M405 250l-4-7h8z"/>
+    <text class="sub" x="410" y="228" font-size="10.5">QA–QD</text>
+    <path class="arrow" d="M500 285H480V200H470"/>
+    <path class="arrowhead" d="M470 200l7-4v8z"/>
+    <text class="sub" x="486" y="250" font-size="10.5">LD'</text>
+    <text class="sub" x="8" y="370" font-size="11.5">个位 RCO 接十位 ENT：只有个位 9→0 时十位才加 1；十位 LD' 由 Q2、Q0 和个位 RCO 译出，只在 59 后回 0</text>
+    <text class="sub" x="8" y="388" font-size="11.5">59 时分脉冲 = 个位 RCO · 十位 Q2 · 十位 Q0；两片 BCD 输出分别送 7448，再驱动共阴数码管</text>
+    <text class="sub" x="8" y="406" font-size="11.5">所有 IC 的电源脚旁并 0.1μF 去耦电容；数码管每段串 330Ω 限流电阻，公共端接 GND</text>
+  </g>
+</svg>
+
+<h2 id="sec-4">显示译码与限流</h2>
+<p>74160 输出的是 8421BCD，正好是 7448 的输入。7448 的 A、B、C、D 分别接 QA、QB、QC、QD（低位到低位，别接反）；a–g 七段输出各串一只 330Ω 电阻，再接到共阴数码管的对应段，公共端接 GND。</p>
+<p>7448 的三个控制脚在正常显示时都要接高：LT&#39;（灯测试）接高表示不测试，RBI&#39;（灭零输入）接高表示不灭零，BI&#39;（灭灯）接高表示不熄灭。任何一脚被拉低，表现分别是&quot;全亮&quot;、&quot;高位零消失&quot;或&quot;全灭&quot;，调试时先查这三脚。</p>
+<p>如果手头是共阳数码管，译码器要换 7447：它的段输出是低有效，公共端接 +5V。<strong>7448 配共阴、7447 配共阳</strong>，两者不能互换；接反的现象是&quot;该亮的段不亮、该灭的段微亮&quot;。</p>
+
+<section class="callout note"><h3 class="callout-title">限流电阻怎么算</h3><p>每段 LED 压降约 2V，5V 电源下电阻承受 3V；按欧姆定律 330Ω 对应约 9mA。但要注意 7448 与 7447 的输出方向不同：7447 是低有效开集灌电流输出（数据手册灌电流 24mA），330Ω 下能真的给出约 9mA；7448 是高有效输出，内部靠 2kΩ 上拉，拉电流只有 1~2mA，达不到 9mA。所以用 7448 配共阴数码管时亮度偏暗，应选高亮管或每段加一只三极管缓冲；7 段全亮时整片总电流仍有限制，不要用 100Ω 以下的电阻。具体电流上限以你手上那颗芯片的数据手册为准。</p>
+</section>
+<h2 id="sec-5">调试步骤与常见故障</h2>
+<p>不要一次全接完再上电，按&quot;电源→时钟→个位→十位→级联→显示&quot;分级验证：</p>
+<ol>
+<li><strong>电源</strong>：5V 稳定，每片 IC 的 VCC/GND 正确，去耦电容到位；先不插芯片，量插座电压。</li>
+<li><strong>时钟</strong>：1Hz 输出接 LED，应该一秒闪一次；频率不对先调 555 或分频链。</li>
+<li><strong>个位</strong>：只装个位 74160，CLR&#39;、LD&#39;、ENT、ENP 接高，看 QA–QD 是否 0000→1001 循环。</li>
+<li><strong>十位</strong>：把 LD&#39; 检测项里的个位 RCO 临时接 1（模拟&quot;个位已到 9&quot;），再手动给时钟，验证 0–5 循环；重点看计到 5 后下一个脉冲是否回 0，而不是停在 6。</li>
+<li><strong>级联</strong>：个位 RCO 接十位 ENT（和 ENP），同时接 LD&#39; 反馈门的一个输入，观察 09→10、19→20、59→00。</li>
+<li><strong>显示</strong>：逐段检查 a–g；某段不亮先量译码器输出和电阻，再怀疑数码管。</li>
+<li><strong>分脉冲</strong>：59 时用 LED 或示波器看 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mrow><mi>m</mi><mi>i</mi><mi>n</mi></mrow></msub></mrow><annotation encoding="application/x-tex">P_{min}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，应该在高电平持续一秒，然后随 00 消失。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>可能原因</th>
+<th>排查</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>数字完全不动</td>
+<td>时钟没到、CLR&#39;/LD&#39; 被拉低、ENT 为低</td>
+<td>量 CLK 引脚、量控制脚电平</td>
+</tr>
+<tr>
+<td>十位出现 6</td>
+<td>LD&#39; 检测项错、LD&#39; 没接、D 端不是 0000</td>
+<td>量 Q2、Q0、RCO 与 LD&#39;，确认 59 时 LD&#39;=0</td>
+</tr>
+<tr>
+<td>50 之后直接跳到 01</td>
+<td>十位 LD&#39; 只由十位自己的 Q2Q0 译出，没并入个位 RCO</td>
+<td>让 LD&#39; 同时受 Q2Q0 和个位 RCO 控制，59 时才置数</td>
+</tr>
+<tr>
+<td>59 后变 60 再回 0</td>
+<td>用了异步清零且检测 6，或十位没置数</td>
+<td>改同步置数，检测 59（十位 5 且个位 RCO=1）</td>
+</tr>
+<tr>
+<td>个位 9 时十位就加 1</td>
+<td>把 RCO 当时钟，或 ENT 常高</td>
+<td>RCO 接 ENT，共用 CLK</td>
+</tr>
+<tr>
+<td>显示缺段/重影</td>
+<td>段电阻缺失、a–g 接错、共阴共阳弄反</td>
+<td>逐段量电压，核对 7448/7447</td>
+</tr>
+<tr>
+<td>计数偶尔跳字</td>
+<td>电源没去耦、时钟抖动、面包板接触不良</td>
+<td>加 0.1μF，换短接线，降低时钟频率测试</td>
+</tr>
+</tbody></table>
+
+<section class="callout key"><h3 class="callout-title">验收的一句话</h3><p>能稳定显示 00–59、59→00 时给出一个分脉冲、十位永不越界、复位可靠，这个项目就算通过。速度、芯片数量都不是重点，<strong>可预测、可复现</strong>才是。</p>
+</section>
+<h2 id="sec-6">练习</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：为什么个位在前、十位在后</h3><p>60 进制为什么拆成&quot;个位模 10 + 十位模 6&quot;，而不是&quot;十位模 6 + 个位模 10&quot;或直接模 60？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>秒表的两位是十进制显示：个位每秒加 1，满 10 向十位进 1；十位每 10 秒加 1，满 6 向分进 1。所以个位必须是模 10、十位必须是模 6。</p>
+<p>如果反过来让十位先模 6，十位会每 6 秒进一次，显示就不是 00–59 的十进制秒表。直接用模 60 计数器虽然状态数对，但输出是 6 位二进制，还要额外转换成两位 BCD 才能显示，反而更麻烦。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：十位模 6 的检测项</h3><p>十位 74160 要做成模 6（0–5）。LD&#39; 的表达式是什么？为什么不能只检测十位的 5，也不能等检测 6？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>74160 的同步置数与 ENT/ENP 无关：LD&#39; 一旦为 0，下一个时钟沿就装载。所以检测项必须带上&quot;个位为 9（RCO=1）&quot;这个条件：$LD&#39;=(Q_2\cdot Q_0\cdot RCO_{个位})&#39;$，D3–D0 接 <code>0000</code>，用与非门实现。这样十位在 0–5 之间正常计数，只在 59→00 那一拍回 0。</p>
+<p>只检测十位的 5 不行：十位一到 5（显示 50），51 那一拍的时钟沿就会把它装成 0，显示从 50 直接跳到 01。等检测 6 再置数也不行：状态 6 会完整出现一个周期，显示闪一下 6，十位就变成模 7。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 3：分脉冲的条件</h3><p>写出 59→00 时产生分脉冲的逻辑表达式，并解释为什么不能只用个位 RCO。</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>分脉冲 $P_{min}=RCO_{个位}\cdot Q_{2,十位}\cdot Q_{0,十位}$。</p>
+<p>个位 RCO 只在个位为 9 时为高，但 19、29、39、49 的个位也是 9；如果不与十位的 5（Q2Q0=1）相与，每个带 9 的十秒都会误发分脉冲。十位为 5 且个位为 9，才是 59。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 4：显示接反了</h3><p>7448 配共阴数码管正常，换成共阳数码管后显示异常。应该换什么芯片？公共端怎么接？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>共阳数码管的公共端接 +5V，段要在译码器输出为低时点亮，所以应换 <strong>7447</strong>（低有效段输出），不能继续用 7448。</p>
+<p>7448 是高有效输出，配共阴（公共端接 GND）；7447 是低有效输出，配共阳（公共端接 +5V）。两者引脚排列相似，但输出极性相反，接反会出现&quot;该亮的段不亮、该灭的段微亮&quot;。</p>
+</div></details></section>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能画出 1Hz→个位→十位→分脉冲的完整信号流</li>
+<li><input disabled="" type="checkbox"> 我能解释个位 RCO 为什么接十位 ENT，而不是接十位 CLK</li>
+<li><input disabled="" type="checkbox"> 我能写出十位模 6 的 LD&#39; 表达式，并说清为什么必须把个位 RCO 并入检测项</li>
+<li><input disabled="" type="checkbox"> 我能写出 59 时的分脉冲表达式，并解释每一项的作用</li>
+<li><input disabled="" type="checkbox"> 我能按电源、时钟、个位、十位、级联、显示的顺序分级调试</li>
+<li><input disabled="" type="checkbox"> 我知道 7448 配共阴、7447 配共阳，以及每段 330Ω 限流</li>
+</ul>
+</section>
+
+  
+<nav class="pager">
+  <a class="prev" href="08-memory-pld.html">← 存储器与可编程逻辑</a>
+  <span></span>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

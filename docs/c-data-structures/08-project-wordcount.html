@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>项目：手写一个词频统计器 · C 语言数据结构</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">C 语言数据结构</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">project</span>
+    <span class="badge ghost">120 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">项目要做什么</a></li><li><a href="#sec-1">四步流水线</a></li><li><a href="#sec-2">第一步和第二步：读文件、切单词</a></li><li><a href="#sec-3">第三步：哈希表计数</a></li><li><a href="#sec-4">第四步：排序输出</a></li><li><a href="#sec-5">里程碑验收</a></li><li><a href="#sec-6">交付清单与常见坑</a></li></ol></nav>
+  <h2 id="sec-0">项目要做什么</h2>
+<p>写一个命令行程序 <code>wordcount</code>：读入一个文本文件，统计每个单词出现的次数，按频次从高到低输出前 20 名。频次相同按字典序，输出对齐、可读。</p>
+<p>约束：<strong>只允许 C 标准库</strong>，不许 STL、第三方库，也不许调系统命令代替分词。哈希表、链表、排序自己搭，排序可以用 libc 的 <code>qsort</code>。这逼你把前六课串起来。</p>
+<h2 id="sec-1">四步流水线</h2>
+<p>整个程序是一条单遍流水线：打开文件 → 逐字符切词 → 丢进哈希表计数 → 把 Entry 指针收进数组排序输出。四步能分别测试，不用全写完才跑。</p>
+<svg class="diagram" viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="词频统计器的四步流水线">
+  <g font-family="-apple-system, 'Microsoft YaHei', sans-serif" font-size="13">
+    <text class="label" x="8" y="22">一次扫描，四步流水线，每一步都能单独验收</text>
+    <rect class="box" x="8" y="52" width="150" height="72" rx="8"/><text class="label" x="83" y="78" text-anchor="middle">1 读文件</text><text class="sub" x="83" y="102" text-anchor="middle" font-size="10.5">fopen / fgetc</text>
+    <rect class="box" x="188" y="52" width="150" height="72" rx="8"/><text class="label" x="263" y="78" text-anchor="middle">2 分词</text><text class="sub" x="263" y="102" text-anchor="middle" font-size="10.5">isalpha + tolower</text>
+    <rect class="box acc" x="368" y="52" width="150" height="72" rx="8"/><text class="label" x="443" y="78" text-anchor="middle">3 哈希计数</text><text class="sub" x="443" y="102" text-anchor="middle" font-size="10.5">拉链 + 负载因子</text>
+    <rect class="box" x="548" y="52" width="150" height="72" rx="8"/><text class="label" x="623" y="78" text-anchor="middle">4 排序输出</text><text class="sub" x="623" y="102" text-anchor="middle" font-size="10.5">qsort + Top 20</text>
+    <g class="arrow"><path d="M158 88h30"/><path d="M338 88h30"/><path d="M518 88h30"/></g>
+    <g class="arrowhead"><path d="M188 88l-7-4v8z"/><path d="M368 88l-7-4v8z"/><path d="M548 88l-7-4v8z"/></g>
+    <text class="sub" x="8" y="164" font-size="11">输入：任意 ASCII 文本文件　　输出：频次降序的 Top N，并列按字典序</text>
+    <text class="sub" x="8" y="186" font-size="11">只用 libc：数组、链表、哈希、qsort 全手写；不引入 STL 或第三方依赖</text>
+  </g>
+</svg>
+
+<h2 id="sec-2">第一步和第二步：读文件、切单词</h2>
+<p>用 <code>fgetc</code> 逐字符扫描，不按行读——词可能跨行。规则定死：<strong>连续字母和撇号算一个词</strong>，其余是分隔符，统一转小写。</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;ctype.h&gt;
+
+#define WORD_MAX 64
+
+/* 每读到一个词就调用 sink；sink 返回 0 表示中断 */
+int each_word(FILE *fp, int (*sink)(const char *, void *), void *ctx) {
+    char buf[WORD_MAX];
+    size_t len = 0;
+    int truncated = 0;
+    int c;
+
+    while ((c = fgetc(fp)) != EOF) {
+        if (isalpha((unsigned char)c) || c == &#39;\&#39;&#39;) {
+            if (len + 1 &lt; sizeof buf) buf[len++] = (char)tolower((unsigned char)c);
+            else truncated = 1;              /* 超长词直接丢弃，防止写越界 */
+        } else if (len &gt; 0) {
+            if (!truncated) {
+                buf[len] = &#39;\0&#39;;
+                if (!sink(buf, ctx)) return 0;
+            }
+            len = 0;
+            truncated = 0;
+        }
+    }
+    if (len &gt; 0 &amp;&amp; !truncated) {             /* 文件末尾没有分隔符 */
+        buf[len] = &#39;\0&#39;;
+        if (!sink(buf, ctx)) return 0;
+    }
+    return 1;
+}
+</code></pre>
+<p><code>(unsigned char)c</code> 不能省：<code>isalpha</code> 要求 <code>unsigned char</code> 或 <code>EOF</code>，传负值在部分实现上是未定义行为。UTF-8 中文不会被 <code>isalpha</code> 认成字母，本项目只处理 ASCII 单词。</p>
+<h2 id="sec-3">第三步：哈希表计数</h2>
+<p>哈希表直接沿用第 6 课的拉链实现：<code>ht_add(ht, word, 1)</code> 找到就加一，找不到就新建 Entry 并复制 key。分词器只负责切词，计数器只负责加一，两者通过 <code>sink</code> 回调连起来，互不依赖。</p>
+<pre><code class="language-c">static int count_word(const char *w, void *ctx) {
+    return ht_add((HashTable *)ctx, w, 1);
+}
+
+/* 在 main 里这样接起来 */
+HashTable ht = {0};
+if (!each_word(fp, count_word, &amp;ht)) { ... }
+</code></pre>
+<p><code>buf</code> 是栈上复用的，下一次读词就被覆盖，所以 <code>ht_add</code> 必须复制 key。直接存 <code>buf</code> 指针的话，所有 key 会变成同一个词——计数看着对，查起来全错。</p>
+
+<section class="callout note"><h3 class="callout-title">为什么不用数组存所有词再统计</h3><p>先存所有词再排序，空间 O(总词数)；哈希表只存<strong>不同词</strong>，O(词汇量)，查找 O(1)。文本越大差距越明显。</p>
+</section>
+<h2 id="sec-4">第四步：排序输出</h2>
+<p>哈希表不保证顺序，先把 Entry 的<strong>指针</strong>收进数组再排序——Entry 不搬家，只交换指针。规则：频次降序，并列按 <code>strcmp</code> 升序。</p>
+<pre><code class="language-c">static int cmp_count(const void *a, const void *b) {
+    const Entry *ea = *(const Entry *const *)a;
+    const Entry *eb = *(const Entry *const *)b;
+    if (ea-&gt;count != eb-&gt;count)
+        return (eb-&gt;count &gt; ea-&gt;count) - (eb-&gt;count &lt; ea-&gt;count);
+    return strcmp(ea-&gt;key, eb-&gt;key);
+}
+
+int print_top(const HashTable *ht, size_t topn) {
+    if (ht-&gt;size == 0) return 1;
+    Entry **arr = malloc(ht-&gt;size * sizeof *arr);
+    if (!arr) return 0;
+
+    size_t k = 0;
+    for (size_t i = 0; i &lt; ht-&gt;nbuckets; i++)
+        for (Entry *e = ht-&gt;buckets[i]; e; e = e-&gt;next) arr[k++] = e;
+
+    qsort(arr, k, sizeof *arr, cmp_count);
+    if (topn &gt; k) topn = k;
+    for (size_t i = 0; i &lt; topn; i++)
+        printf(&quot;%-20s %d\n&quot;, arr[i]-&gt;key, arr[i]-&gt;count);
+
+    free(arr);
+    return 1;
+}
+</code></pre>
+<p><code>(eb-&gt;count &gt; ea-&gt;count) - (eb-&gt;count &lt; ea-&gt;count)</code> 是三向比较：a 的频次更小时返回正数（a 排到后面），更大时返回负数，相等返回 0，于是频次高的排前面。别写 <code>return ea-&gt;count - eb-&gt;count</code>，int 相减会溢出。</p>
+<p>最后的 <code>main</code> 把四步接起来：参数检查、<code>fopen</code> 检查、计数、输出、<code>free</code>。</p>
+<pre><code class="language-c">int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, &quot;usage: %s &lt;file&gt;\n&quot;, argv[0]);
+        return 1;
+    }
+    FILE *fp = fopen(argv[1], &quot;r&quot;);
+    if (!fp) { perror(&quot;fopen&quot;); return 1; }
+
+    HashTable ht = {0};
+    if (!each_word(fp, count_word, &amp;ht)) {
+        fclose(fp);
+        ht_free(&amp;ht);
+        return 1;
+    }
+    fclose(fp);
+
+    print_top(&amp;ht, 20);
+    ht_free(&amp;ht);
+    return 0;
+}
+</code></pre>
+<h2 id="sec-5">里程碑验收</h2>
+<p>项目拆成四个里程碑，每完成一个就独立验证。别等全写完再跑，否则出错时分不清是哪一步。</p>
+
+<section class="callout exercise"><h3 class="callout-title">里程碑 1：能读文件并切出词</h3><p>用 <code>test1.txt</code>（内容 <code>Hello, world! It&#39;s C.</code>）跑分词，打印每个词。验收点：文件不存在时返回非 0 并打印错误；空文件不崩；词全部小写；<code>It&#39;s</code> 按规则切成 <code>it&#39;s</code> 一个词。</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>输出应依次是 <code>hello</code>、<code>world</code>、<code>it&#39;s</code>、<code>c</code>，共 4 个词。<code>perror(&quot;fopen&quot;)</code> 能在文件不存在时给出原因；<code>each_word</code> 在 <code>EOF</code> 后还要冲刷缓冲区里的最后一个词，否则 <code>C</code> 会丢。</p>
+<p>判断标准：4 个词、没有空串、没有标点残留。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">里程碑 2：哈希表能正确累计</h3><p><code>test2.txt</code> 内容 <code>apple banana apple</code>。验收点：<code>ht.size == 2</code>；<code>apple</code> 的计数是 2，<code>banana</code> 是 1；<code>ht_get</code> 对不存在的 <code>zzz</code> 返回 0。</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>计数应为 <code>apple=2</code>、<code>banana=1</code>，不同词数 <code>size=2</code>。<code>ht_add</code> 命中已有 key 时只加 <code>count</code>，不增加 <code>size</code>；只有新建 Entry 才 <code>size++</code>。</p>
+<p>判断标准：<code>size</code> 与&quot;不同词数&quot;一致，而不是与&quot;总词数&quot;一致。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">里程碑 3：大小写和标点归一</h3><p><code>test3.txt</code> 内容 <code>Apple, apple! APPLE?</code>。验收点：输出只有一条 <code>apple 3</code>；不会出现 <code>apple,</code> 这种带标点的 key；连续标点、行尾、文件末尾都不产生空词。</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><code>apple</code> 计数为 3，<code>ht.size == 1</code>。<code>tolower</code> 在拼进 <code>buf</code> 之前调用；分隔符分支里只在 <code>len &gt; 0</code> 时才提交单词，因此连续空格和 <code>!?</code> 都不会产生空串。</p>
+<p>判断标准：大小写合并、标点剥离、无空 key 三件事同时成立。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">里程碑 4：Top N 排序输出</h3><p><code>test4.txt</code> 让 <code>b</code> 和 <code>a</code> 都出现 2 次，<code>c</code> 出现 1 次。验收点：输出顺序为 <code>a 2</code>、<code>b 2</code>、<code>c 1</code>（并列按字典序）；<code>print_top(&amp;ht, 2)</code> 只输出前两条且不越界；空文件不崩。</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>频次降序、并列字典序：<code>a 2</code>、<code>b 2</code>、<code>c 1</code>。<code>topn</code> 大于实际词数时要把它压到 <code>k</code>，否则数组越界；<code>ht-&gt;size == 0</code> 时直接返回，避免 <code>malloc(0)</code> 的返回值不确定。</p>
+<p>判断标准：排序稳定符合两条规则、Top N 截断正确、空输入有保护。</p>
+</div></details></section>
+<h2 id="sec-6">交付清单与常见坑</h2>
+<p>提交前对着清单自查：</p>
+<ul>
+<li><code>gcc -std=c11 -Wall -Wextra wordcount.c -o wordcount</code> 零警告；<code>-fsanitize=address</code> 跑三份测试文本无泄漏、无越界。</li>
+<li>所有 <code>malloc</code> 都有 NULL 检查；<code>fopen</code> 失败走错误分支；<code>fclose</code> 在所有路径上都执行。</li>
+<li>释放顺序：先 <code>ht_free</code>（它释放每个 key 和 Entry），再退出；<code>print_top</code> 里的 <code>arr</code> 单独 <code>free</code>。</li>
+<li>超长词（超过 63 字符）被丢弃而不是截断成两个词；<code>WORD_MAX</code> 的边界写 <code>len + 1 &lt; sizeof buf</code>，保证给 <code>&#39;\0&#39;</code> 留位。</li>
+<li>输出用 <code>%-20s</code> 对齐；词数不足 20 时不打印多余行。</li>
+</ul>
+
+<section class="callout warn"><h3 class="callout-title">三个必查的崩溃点</h3><ol>
+<li><code>fgetc</code> 返回 <code>int</code>，别用 <code>char</code> 接——<code>EOF</code> 是 -1，<code>char</code> 可能是无符号，循环永远不结束。</li>
+<li><code>qsort</code> 的比较函数里 <code>*(Entry *const *)a</code> 的括号不能少，否则你比较的是指针地址。</li>
+<li>空文件和只有标点的文件：<code>ht.size == 0</code>，此时任何&quot;取第一名&quot;的代码都必须先判空。</li>
+</ol>
+</section>
+<p>写完这个项目，动态数组、链表、哈希、排序就串成了一条真实数据通路。</p>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能不看代码说出四步流水线的输入输出</li>
+<li><input disabled="" type="checkbox"> 我知道分词为什么要 <code>(unsigned char)</code> 和 <code>tolower</code></li>
+<li><input disabled="" type="checkbox"> 我能解释哈希表存 key 必须复制，不能存栈上的 <code>buf</code></li>
+<li><input disabled="" type="checkbox"> 我能写出降序 + 并列字典序的比较函数，并说清 Top N 的截断</li>
+<li><input disabled="" type="checkbox"> 我的程序在空文件、超长词、不存在文件三种输入下都不崩</li>
+</ul>
+</section>
+
+  
+<nav class="pager">
+  <a class="prev" href="07-graph.html">← 图与两种遍历</a>
+  <span></span>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

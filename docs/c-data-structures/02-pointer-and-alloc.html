@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>指针、动态内存与手动扩容 · C 语言数据结构</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">C 语言数据结构</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">concept</span>
+    <span class="badge ghost">55 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">先说结论</a></li><li><a href="#sec-1">指针记的是位置，不是数据</a></li><li><a href="#sec-2">malloc 的三条铁律</a></li><li><a href="#sec-3">realloc：换尺寸，不是&amp;quot;变大&amp;quot;</a></li><li><a href="#sec-4">手写 IntVec：一个能长大的数组</a></li><li><a href="#sec-5">三个一定会踩的坑</a></li><li><a href="#sec-6">练习</a></li></ol></nav>
+  <h2 id="sec-0">先说结论</h2>
+<p>数组的死穴是长度写死。要让它运行时长大，C 只给三样东西：<code>malloc</code> 要内存、<code>realloc</code> 换尺寸、<code>free</code> 还回去。所谓&quot;动态数组&quot;就是<strong>一个指针加两个数</strong>：<code>data</code> 指向堆上缓冲区，<code>size</code> 记用了多少格，<code>cap</code> 记最多能放多少格。</p>
+<p>堆上的每块内存都有主人：谁 <code>malloc</code>，谁负责 <code>free</code>。C 不替你记账，漏一次是泄漏，多一次是崩溃。</p>
+<h2 id="sec-1">指针记的是位置，不是数据</h2>
+<p><code>int x = 42; int *p = &amp;x;</code> 里，<code>x</code> 是 4 字节的整数，<code>p</code> 是 8 字节的地址。<code>*p</code> 是&quot;顺着地址找过去&quot;，<code>&amp;x</code> 是&quot;把 x 的地址拿出来&quot;。指针变量自己也有地址，这就是二级指针的全部含义。</p>
+<svg class="diagram" viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="动态数组由栈上的结构体和堆上的缓冲区组成">
+  <g font-family="-apple-system, 'Microsoft YaHei', sans-serif" font-size="13">
+    <text class="label" x="8" y="22">栈上的 IntVec v（24 字节）</text>
+    <rect class="box" x="8" y="34" width="176" height="92" rx="6"/>
+    <text class="label" x="22" y="60">data = 0x7f20</text>
+    <text class="sub" x="22" y="80" font-size="11.5">size = 3</text>
+    <text class="sub" x="22" y="100" font-size="11.5">cap  = 4</text>
+    <text class="label" x="248" y="22">堆上的缓冲区：malloc 来的 4 个 int</text>
+    <rect class="box acc" x="248" y="34" width="76" height="44" rx="6"/><text class="label" x="286" y="61" text-anchor="middle">10</text>
+    <rect class="box acc" x="330" y="34" width="76" height="44" rx="6"/><text class="label" x="368" y="61" text-anchor="middle">20</text>
+    <rect class="box acc" x="412" y="34" width="76" height="44" rx="6"/><text class="label" x="450" y="61" text-anchor="middle">30</text>
+    <rect class="box" x="494" y="34" width="76" height="44" rx="6"/><text class="sub" x="532" y="61" text-anchor="middle">未使用</text>
+    <text class="sub" x="248" y="96" font-size="11">0x7f20</text>
+    <text class="sub" x="570" y="96" font-size="11" text-anchor="end">0x7f30 止</text>
+    <g class="arrow"><path d="M184 66h60"/></g>
+    <g class="arrowhead"><path d="M248 66l-7-4v8z"/></g>
+    <text class="sub" x="8" y="126" font-size="11">data 只是一根线：它指向的那 16 字节不在结构体里</text>
+    <text class="label" x="8" y="168">push 第 5 个：满了，realloc 换一整块更大的内存</text>
+    <rect class="loop" x="8" y="180" width="146" height="42" rx="6"/>
+    <text class="sub" x="81" y="206" font-size="11" text-anchor="middle">旧块 4 格（已经 free）</text>
+    <g class="loop"><path d="M154 201h42"/></g>
+    <g class="arrowhead"><path d="M200 201l-7-4v8z"/></g>
+    <rect class="box acc" x="204" y="180" width="56" height="42" rx="5"/><text class="label" x="232" y="206" text-anchor="middle">10</text>
+    <rect class="box acc" x="264" y="180" width="56" height="42" rx="5"/><text class="label" x="292" y="206" text-anchor="middle">20</text>
+    <rect class="box acc" x="324" y="180" width="56" height="42" rx="5"/><text class="label" x="352" y="206" text-anchor="middle">30</text>
+    <rect class="box acc" x="384" y="180" width="56" height="42" rx="5"/><text class="label" x="412" y="206" text-anchor="middle">40</text>
+    <rect class="box" x="444" y="180" width="56" height="42" rx="5"/><text class="sub" x="472" y="206" font-size="10" text-anchor="middle">空</text>
+    <rect class="box" x="504" y="180" width="56" height="42" rx="5"/><text class="sub" x="532" y="206" font-size="10" text-anchor="middle">空</text>
+    <rect class="box" x="564" y="180" width="56" height="42" rx="5"/><text class="sub" x="592" y="206" font-size="10" text-anchor="middle">空</text>
+    <rect class="box" x="624" y="180" width="56" height="42" rx="5"/><text class="sub" x="652" y="206" font-size="10" text-anchor="middle">空</text>
+    <text class="sub" x="8" y="248" font-size="11.5">搬 3 个旧元素是 O(n)；但每翻倍一次才搬一次，均摊每次 push 仍是 O(1)</text>
+  </g>
+</svg>
+
+<p>图里 <code>v</code> 在栈上，函数返回就消失；4 个 int 在堆上，是另一次分配。<strong>结构体和缓冲区是两处内存</strong>：缓冲区必须 <code>free</code>，结构体本身如果是 <code>malloc</code> 来的也要单独 <code>free</code>。</p>
+<h2 id="sec-2">malloc 的三条铁律</h2>
+<p><code>malloc</code> 返回 <code>void *</code>，失败返回 <code>NULL</code>。三件事必须做：检查返回值、算对字节数、用完释放。</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main(void) {
+    int n = 0;
+    if (scanf(&quot;%d&quot;, &amp;n) != 1 || n &lt;= 0) return 1;
+
+    int *a = malloc((size_t)n * sizeof *a);   /* sizeof *a 比 sizeof(int) 更难写错 */
+    if (a == NULL) {                          /* 铁律一：检查返回值 */
+        fprintf(stderr, &quot;malloc failed\n&quot;);
+        return 1;
+    }
+
+    for (int i = 0; i &lt; n; i++) a[i] = i;
+    printf(&quot;%d\n&quot;, a[n - 1]);
+
+    free(a);                                  /* 铁律三：配对释放 */
+    a = NULL;                                 /* 置空，后面误用会立刻崩，而不是悄悄写坏内存 */
+    return 0;
+}
+</code></pre>
+<p><code>calloc</code> 会清零，<code>malloc</code> 不会；结构体初始化建议用 <code>= {0}</code> 或 <code>calloc</code>，能省掉一半诡异 bug。</p>
+
+<section class="callout warn"><h3 class="callout-title">字节数要用 size_t 算</h3><p><code>n * sizeof(int)</code> 里 <code>sizeof</code> 的类型是 <code>size_t</code>，<code>n</code> 会先被转成无符号再参与乘法——所以负的 <code>n</code> 会变成一个天文数字。乘积本身在 <code>size_t</code> 里计算，64 位下大 <code>n</code> 一般不会在 int 范围内溢出，但 32 位下仍可能回绕。先校验 <code>n &gt; 0</code>，再写 <code>(size_t)n * sizeof *a</code>；<code>malloc(0)</code> 合法，但别解引用它的返回值。</p>
+</section>
+<h2 id="sec-3">realloc：换尺寸，不是&quot;变大&quot;</h2>
+<p><code>realloc(p, new_size)</code> 的语义是：<strong>申请一块 new_size 的新内存，把 p 指向的旧内容尽量搬过去，然后释放旧块，返回新地址</strong>。它可能原地加长，也可能整块搬到别处，所以返回值必须接住，而且不能直接覆盖原指针。</p>
+<pre><code class="language-c">#include &lt;stdlib.h&gt;
+
+/* 返回新缓冲区；失败时返回 NULL，且旧指针 old 仍然有效 */
+static int *grow(int *old, size_t oldcap, size_t newcap) {
+    int *p = realloc(old, newcap * sizeof *p);
+    if (p == NULL) return NULL;      /* 旧块没被释放，调用者还能继续用或 free */
+    (void)oldcap;                    /* 这里用不到，仅示意接口 */
+    return p;
+}
+</code></pre>
+
+<section class="callout warn"><h3 class="callout-title">不要写 `p = realloc(p, ...)`</h3><p>如果 <code>realloc</code> 失败返回 NULL，原指针就被 NULL 覆盖了，那块内存从此没人知道地址——泄漏，而且程序还继续往 NULL 写。正确顺序是先存到临时变量，成功了再赋回。</p>
+</section>
+<p>容量翻倍不是随便选的美学。假设每次只加 1 格，push n 次要搬 1+2+…+n 次，总代价 O(n²)；每次翻倍，总搬运量不超过 2n，均摊到每次 push 就是 O(1)。<strong>单次最坏仍然是 O(n)，但摊还下来很便宜。</strong></p>
+<h2 id="sec-4">手写 IntVec：一个能长大的数组</h2>
+<p>把前面的东西拼起来，就是一个最小可用的动态数组。注意容量为 0 时 <code>realloc(NULL, size)</code> 等价于 <code>malloc(size)</code>，所以初始化只需要 <code>= {0}</code>。</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+typedef struct {
+    int *data;
+    size_t size;
+    size_t cap;
+} IntVec;
+
+static int vec_reserve(IntVec *v, size_t need) {
+    if (need &lt;= v-&gt;cap) return 1;
+    size_t newcap = v-&gt;cap ? v-&gt;cap * 2 : 4;
+    while (newcap &lt; need) newcap *= 2;
+    int *p = realloc(v-&gt;data, newcap * sizeof *p);
+    if (p == NULL) return 0;
+    v-&gt;data = p;
+    v-&gt;cap = newcap;
+    return 1;
+}
+
+int vec_push(IntVec *v, int x) {
+    if (!vec_reserve(v, v-&gt;size + 1)) return 0;
+    v-&gt;data[v-&gt;size++] = x;
+    return 1;
+}
+
+int vec_get(const IntVec *v, size_t i, int *out) {
+    if (i &gt;= v-&gt;size) return 0;
+    *out = v-&gt;data[i];
+    return 1;
+}
+
+void vec_free(IntVec *v) {
+    free(v-&gt;data);
+    v-&gt;data = NULL;
+    v-&gt;size = v-&gt;cap = 0;
+}
+
+int main(void) {
+    IntVec v = {0};
+    for (int i = 0; i &lt; 20; i++) {
+        if (!vec_push(&amp;v, i * i)) { fprintf(stderr, &quot;out of memory\n&quot;); return 1; }
+    }
+    int last = 0;
+    if (vec_get(&amp;v, v.size - 1, &amp;last)) printf(&quot;size=%zu cap=%zu last=%d\n&quot;, v.size, v.cap, last);
+    vec_free(&amp;v);
+    return 0;
+}
+</code></pre>
+<p><code>vec_push</code> 失败时返回 0，表保持原样，调用者可以决定重试还是报错。<strong>接口用返回值报告失败，而不是直接 abort</strong>。</p>
+<h2 id="sec-5">三个一定会踩的坑</h2>
+<p>第一，<strong>返回局部变量的地址</strong>。<code>int *f(void) { int a[10]; return a; }</code> 函数一返回，栈帧就作废，指针悬空。要返回数组就 <code>malloc</code>，并让调用者 <code>free</code>。</p>
+<p>第二，<strong>free 之后继续用</strong>。<code>free(p)</code> 后 p 的值还是原地址，但内存已还给分配器，可能立刻被下一次 <code>malloc</code> 拿去用。养成 <code>p = NULL</code> 的习惯，至少让误用变成段错误而不是数据错乱。</p>
+<p>第三，<strong>同一个指针 free 两次</strong>。第二次是未定义行为，常见于两个结构体共用一个指针。约定所有权：一块内存只有一个主人，别人只借不还。</p>
+
+<section class="callout key"><h3 class="callout-title">所有权约定</h3><p>函数返回 <code>malloc</code> 出来的指针，就是把所有权交给调用者；只借指针参数用，就绝不 <code>free</code>。写接口时先回答&quot;这块内存谁负责释放&quot;，比事后查泄漏轻松十倍。</p>
+</section>
+<h2 id="sec-6">练习</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：找出这段代码的隐患</h3><pre><code class="language-c">int n;
+scanf(&quot;%d&quot;, &amp;n);
+int *a = malloc(n * sizeof(int));
+for (int i = 0; i &lt; n; i++) a[i] = i;
+</code></pre>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>至少三处：</p>
+<ol>
+<li><code>n</code> 没校验：负数会被转成巨大的 <code>size_t</code> 去请求内存，<code>n == 0</code> 拿到的是 <code>malloc(0)</code> 的指针；应提前只接受 <code>n &gt; 0</code>。</li>
+<li><code>malloc</code> 返回值没检查，内存不足时 <code>a</code> 是 NULL，循环里写 <code>a[i]</code> 直接崩。</li>
+<li>没有 <code>free(a)</code>，程序结束时泄漏。</li>
+</ol>
+<p>判断标准：读入的数据先校验范围，分配后先判 NULL，离开作用域前配对释放。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：算均摊代价</h3><p>从一个容量为 1、已经有 1 次分配的空表开始，每次满了就把容量翻倍。连续 push 1000 个元素（假设内存足够），一共发生几次扩容？总共搬动多少个旧元素？单次最坏和均摊复杂度各是多少？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><ul>
+<li>容量序列 1 → 2 → 4 → … → 1024，共 <strong>10 次</strong>扩容（1→2 第 1 次，512→1024 第 10 次）。</li>
+<li>搬运总量 1+2+4+…+512 = <strong>1023</strong> 个，不超过 2N。</li>
+<li>单次最坏 O(n)（那次从 512 搬到 1024），但均摊 O(1)。</li>
+</ul>
+<p>判断标准：能说出&quot;总搬运量 &lt; 2N 所以均摊常数&quot;，而不是只说&quot;翻倍比较快&quot;。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 3：谁该 free</h3><pre><code class="language-c">#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+char *make_name(void) {
+    char *s = malloc(16);
+    strcpy(s, &quot;ds&quot;);
+    return s;
+}
+
+int main(void) {
+    char *a = make_name();
+    char *b = &quot;ds&quot;;
+    free(a);
+    free(b);
+    return 0;
+}
+</code></pre>
+<p>哪一行有问题？为什么？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><code>free(b)</code> 是未定义行为。<code>b</code> 指向字符串字面量，位于静态存储区，不是 <code>malloc</code>/<code>calloc</code>/<code>realloc</code> 返回的块，堆管理器没有它的记录。<code>a</code> 反而必须 free，因为 <code>make_name</code> 把所有权交给了调用者。</p>
+<p>判断标准：只有从 <code>malloc</code> 家族拿到的指针才能 free，且一块内存只能 free 一次；字面量、数组名、栈变量地址一律不能 free。</p>
+</div></details></section>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能画出&quot;栈上结构体 + 堆上缓冲区&quot;，并说清两处内存分别由谁释放</li>
+<li><input disabled="" type="checkbox"> 我写 malloc 时会检查 NULL、用 sizeof *p 算字节、配对 free</li>
+<li><input disabled="" type="checkbox"> 我能解释为什么 realloc 的结果不能直接赋回原指针</li>
+<li><input disabled="" type="checkbox"> 我能算出翻倍扩容的均摊复杂度，并说出单次最坏情况</li>
+</ul>
+</section>
+
+  
+<nav class="pager">
+  <a class="prev" href="01-memory-and-array.html">← 数据结构到底是什么：内存、类型与数组</a>
+  <a class="next" href="03-linked-list.html">链表：把连续打散成节点 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

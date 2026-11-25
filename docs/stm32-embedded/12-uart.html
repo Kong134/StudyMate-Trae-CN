@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>串口 UART：帧格式、波特率与 printf 重定向 · STM32 嵌入式开发</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">STM32 嵌入式开发</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">practice</span>
+    <span class="badge ghost">90 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 一根线怎么传 0 和 1：先看帧</a></li><li><a href="#sec-2">2. 波特率：一个必须会算的数字</a></li><li><a href="#sec-3">3. 三种收发方式，怎么选</a></li><li><a href="#sec-4">4. HAL 库接收的坑：定长 vs 不定长</a></li><li><a href="#sec-5">5. printf 重定向：让板子会说话</a></li><li><a href="#sec-6">6. 算一算</a></li><li><a href="#sec-7">7. 动手项目</a></li><li><a href="#sec-8">8. 本课小结</a></li><li><a href="#sec-9">9. 下一课预告</a></li></ol></nav>
+  <h2 id="sec-0">这一课要解决的问题</h2>
+
+<section class="callout goal"><h3 class="callout-title">本课目标</h3><p>读完你能：说清一帧串口数据由哪几位组成；由波特率算出每一位的时间、判断误差是否可接受；用中断 + 环形缓冲区收不定长数据；把 <code>printf</code> 重定向到串口，让板子能&quot;说话&quot;；知道为什么接收不能只用 <code>HAL_UART_Receive_IT</code>。</p>
+</section>
+<p>前 11 课，板子的输出只有 LED 和波形。这一课给它一张嘴和一对耳朵——<strong>串口</strong>。它是最古老、最简单、也最不可能被淘汰的通信方式：调试要靠它，模块（GPS、蓝牙、WiFi、指纹）大半也靠它。</p>
+<hr>
+<h2 id="sec-1">1. 一根线怎么传 0 和 1：先看帧</h2>
+<p>串口是<strong>异步</strong>通信：没有时钟线，收发双方各自按约定好的节奏采样。所以每一帧都必须自带&quot;开始&quot;和&quot;结束&quot;的标记。</p>
+<p>一帧 8 位数据、无校验、1 位停止（常写成 <strong>115200-8-N-1</strong>）长这样：</p>
+<svg class="diagram" viewBox="0 0 860 220" xmlns="http://www.w3.org/2000/svg">
+  <text class="label" x="16" y="28" font-size="11.5">一帧 = 起始位 + 8 位数据（低位在前）+ 停止位，共 10 位</text>
+  <path d="M 60 130 L 60 90 L 110 90 L 110 130 L 160 130 L 160 90 L 210 90 L 210 130 L 260 130 L 260 90 L 310 90 L 310 130 L 360 130 L 360 90 L 410 90 L 410 130 L 460 130 L 460 90 L 510 90 L 510 130 L 560 130 L 560 90 L 610 90 L 610 130 L 660 130 L 660 90 L 710 90 L 710 130"
+        stroke="#c0392b" stroke-width="2" fill="none"/>
+  <line class="loop" x1="60" y1="160" x2="810" y2="160"/>
+  <text class="sub" x="66" y="180" font-size="9.5">起始 0</text>
+  <text class="sub" x="160" y="180" font-size="9.5">D0</text>
+  <text class="sub" x="210" y="180" font-size="9.5">D1</text>
+  <text class="sub" x="310" y="180" font-size="9.5">D2</text>
+  <text class="sub" x="460" y="180" font-size="9.5">D3</text>
+  <text class="sub" x="660" y="180" font-size="9.5">D4…</text>
+  <text class="sub" x="710" y="180" font-size="9.5">停止 1</text>
+  <text class="sub" x="60" y="204" font-size="10">空闲时线上是高电平；一个下降沿 = 一帧开始。</text>
+</svg>
+
+<p>要点：</p>
+<ol>
+<li><strong>空闲是高电平</strong>。所以&quot;线断了&quot;和&quot;没数据&quot;看起来一样，都是高。</li>
+<li><strong>起始位是低电平</strong>。接收方靠这个下降沿对齐自己的采样时钟——这是异步通信唯一同步的机会。</li>
+<li><strong>数据低位在前</strong>。发 <code>0x41</code>（&#39;A&#39;，二进制 0100 0001），线上先出现的是最低位 1，最后才是最高位 0。</li>
+<li><strong>停止位是高电平</strong>，至少 1 位，给接收方一点喘息时间。</li>
+</ol>
+
+<section class="callout note"><h3 class="callout-title">为什么串口能容忍&quot;时钟不准&quot;</h3><p>接收方并不是在每一位中间采样一次，而是在<strong>每一位的中点</strong>采样（16 倍过采样时取第 8、9、10 个时钟投票）。</p>
+<p>一帧 10 位，只要双方累计误差在停止位之前不超过<strong>半个位宽</strong>，采样点就还在正确的位上。算下来，波特率误差容忍大约 <strong>±2%~3%</strong>（10 位帧、无校验时约 ±5%）。</p>
+<p>这就是为什么&quot;波特率差一点点也能通，差多了全是乱码&quot;——不是玄学，是误差累积到半个位宽了。</p>
+</section>
+<hr>
+<h2 id="sec-2">2. 波特率：一个必须会算的数字</h2>
+<p>波特率 = <strong>每秒传多少位</strong>（含起始、停止位）。115200 就是每秒 115200 个位。</p>
+<p>STM32 的 USART 内部把 PCLK 做 16 倍过采样，所以分频系数是：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>USARTDIV</mtext><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mrow><mn>16</mn><mo>×</mo><mtext>baud</mtext></mrow></mfrac></mrow><annotation encoding="application/x-tex">\text{USARTDIV} = \frac{f_{PCLK}}{16 \times \text{baud}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">USARTDIV</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1408em;vertical-align:-0.7693em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">16</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">baud</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">PC</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>USART2 挂在 APB1 上（36MHz），USART1 挂在 APB2 上（72MHz）。<strong>注意这两个不一样</strong>，配错时钟源波特率就错一倍。</p>
+<p>以 USART1、72MHz、115200 为例：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>USARTDIV</mtext><mo>=</mo><mfrac><mrow><mn>72</mn><mtext> </mtext><mn>000</mn><mtext> </mtext><mn>000</mn></mrow><mrow><mn>16</mn><mo>×</mo><mn>115200</mn></mrow></mfrac><mo>=</mo><mn>39.0625</mn></mrow><annotation encoding="application/x-tex">\text{USARTDIV} = \frac{72\,000\,000}{16 \times 115200} = 39.0625</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">USARTDIV</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0908em;vertical-align:-0.7693em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">16</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">115200</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">72</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">000</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">000</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">39.0625</span></span></span></span></span></p>
+<p>BRR 寄存器把整数和小数分开存：整数部分 39 放高 12 位，小数 0.0625 × 16 = 1 放低 4 位。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>B</mi><mi>R</mi><mi>R</mi><mo>=</mo><mo stretchy="false">(</mo><mn>39</mn><mo>≪</mo><mn>4</mn><mo stretchy="false">)</mo><mtext> </mtext><mi mathvariant="normal">∣</mi><mtext> </mtext><mn>1</mn><mo>=</mo><mn>0</mn><mi>x</mi><mn>271</mn></mrow><annotation encoding="application/x-tex">BRR = (39 \ll 4) \,|\, 1 = 0x271</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.00773em;">BRR</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">39</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≪</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">4</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">271</span></span></span></span></span></p>
+<p>反算实际波特率：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>72</mn><mi>M</mi><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mn>16</mn><mo>×</mo><mn>39.0625</mn><mo stretchy="false">)</mo><mo>=</mo><mn>115200</mn></mrow><annotation encoding="application/x-tex">72M / (16 \times 39.0625) = 115200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">72</span><span class="mord mathnormal" style="margin-right:0.10903em;">M</span><span class="mord">/</span><span class="mopen">(</span><span class="mord">16</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">39.0625</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">115200</span></span></span></span>，<strong>误差 0</strong>。</p>
+<p>再看一个不整除的：9600 时 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>USARTDIV</mtext><mo>=</mo><mn>468.75</mn></mrow><annotation encoding="application/x-tex">\text{USARTDIV} = 468.75</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">USARTDIV</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">468.75</span></span></span></span>，整数 468、小数 0.75×16 = 12，<code>BRR = 0x1D4C</code>，实际仍是精确的 9600。</p>
+
+<section class="callout key"><h3 class="callout-title">计算流程（背下来）</h3><ol>
+<li>确认这个 USART 挂在哪条总线：<strong>USART1 → 72MHz，USART2/3 → 36MHz</strong>。</li>
+<li>算 <code>USARTDIV = fPCLK / (16 × baud)</code>。</li>
+<li>整数部分进 BRR[15:4]，<code>小数 × 16</code> 取整进 BRR[3:0]。</li>
+<li>反算实际波特率，算误差：<code>|实际 − 目标| / 目标</code>，<strong>要小于 2%</strong>。</li>
+</ol>
+<p>CubeMX 会自动算好 BRR，但面试会让你手算，而且&quot;为什么我的串口是乱码&quot;十有八九是这里配错。</p>
+</section>
+
+<section class="callout warn"><h3 class="callout-title">波特率配错的典型现象</h3><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>全是乱码/方块，但偶尔能认出几个字符</td>
+<td>波特率差 2%~10%（比如配了 115200，实际跑 9600 的 8 倍偏差）</td>
+</tr>
+<tr>
+<td>一个字符都收不到</td>
+<td>波特率差太多，或者 TX/RX 接反</td>
+</tr>
+<tr>
+<td>收到自己的发送内容（回环）</td>
+<td>TX 和 RX 短接了，或引脚复用配错</td>
+</tr>
+<tr>
+<td>电脑端一会儿通一会儿断</td>
+<td>没共地，或 USB-TTL 供电不足</td>
+</tr>
+<tr>
+<td>发送正常、接收全是 0x00</td>
+<td>RX 引脚没配成复用/上拉，或没开接收中断</td>
+</tr>
+</tbody></table>
+<p><strong>排查顺序</strong>：先确认两边波特率一致 → 再确认 TX 接对方 RX（交叉）→ 再确认共地 → 最后才怀疑代码。</p>
+</section>
+<hr>
+<h2 id="sec-3">3. 三种收发方式，怎么选</h2>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>CPU 占用</th>
+<th>适合</th>
+<th>HAL 函数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>轮询</strong></td>
+<td>全程阻塞</td>
+<td>初始化打印、简单调试</td>
+<td><code>HAL_UART_Transmit</code> / <code>Receive</code></td>
+</tr>
+<tr>
+<td><strong>中断</strong></td>
+<td>每字节一次</td>
+<td>低频、不定长</td>
+<td><code>HAL_UART_Transmit_IT</code> / <code>Receive_IT</code></td>
+</tr>
+<tr>
+<td><strong>DMA</strong></td>
+<td>几乎为 0</td>
+<td>大批量、高波特率</td>
+<td><code>HAL_UART_Transmit_DMA</code> / <code>Receive_DMA</code></td>
+</tr>
+</tbody></table>
+<p>发数据用轮询问题不大（发完就走）。<strong>收数据绝对不能用轮询</strong>：你不知道对方什么时候发，轮询要么一直卡着，要么漏掉。</p>
+<p>但中断接收也有个坑，下一节讲。</p>
+<hr>
+<h2 id="sec-4">4. HAL 库接收的坑：定长 vs 不定长</h2>
+<p><code>HAL_UART_Receive_IT(&amp;huart1, buf, 10)</code> 的意思是&quot;<strong>收满 10 个字节</strong>才进一次回调&quot;。可现实中的数据是<strong>不定长</strong>的：发 <code>&quot;OK\r\n&quot;</code> 是 4 个字节，发 <code>&quot;ERROR\r\n&quot;</code> 是 7 个字节。</p>
+<p>如果你写死 10，短包永远等不到回调，长包会被截断。</p>
+<h3>4.1 正确姿势：空闲中断 + DMA</h3>
+<p>思路：让 DMA 把收到的每个字节自动搬进缓冲区，<strong>总线空闲（IDLE）时</strong>说明一包发完了，再去处理。</p>
+<p>这段拆成四个文件：<code>Hardware/Inc/bsp_uart.h</code>（接口）、<code>Hardware/Src/bsp_uart.c</code>（IDLE + DMA + 环形缓冲）、<code>Core/Src/stm32f1xx_it.c</code>（中断入口，CubeMX 生成）、<code>Core/Src/main.c</code>（初始化 + 主循环）。</p>
+<p><strong>文件：<code>Hardware/Inc/bsp_uart.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_UART_H
+#define __BSP_UART_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+#define UART_RX_BUF_SIZE   128U   /* DMA 落点：一包最多 128 字节 */
+#define UART_RING_SIZE     256U   /* 环形缓冲，必须是 2 的幂 */
+#define UART_LINE_SIZE     64U    /* 一条命令最长 63 字符 + 结尾 &#39;\0&#39; */
+
+void     BSP_UART_Init(UART_HandleTypeDef *huart);       /* 打开 IDLE + 启动 DMA 接收 */
+void     BSP_UART_IdleHandler(UART_HandleTypeDef *huart);/* 在 USARTx_IRQHandler 里调用 */
+int      BSP_UART_GetByte(void);                          /* 取一个字节，空返回 -1 */
+uint16_t BSP_UART_GetLine(char *line, uint16_t max_len);  /* 取一整行，无完整行返回 0 */
+uint16_t BSP_UART_RxLen(void);                            /* 上一包字节数，调试用 */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_UART_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_uart.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_uart.h&quot;
+
+static uint8_t  s_rx_buf[UART_RX_BUF_SIZE];         /* DMA 直接写入的落点 */
+static uint8_t  s_ring[UART_RING_SIZE];             /* 环形缓冲：中断→主循环 */
+static volatile uint16_t s_head = 0;                /* 写指针，只由中断改 */
+static volatile uint16_t s_tail = 0;                /* 读指针，只由主循环改 */
+static volatile uint16_t s_last_len = 0;            /* 上一包字节数 */
+
+void BSP_UART_Init(UART_HandleTypeDef *huart)
+{
+    s_head = 0;
+    s_tail = 0;
+    __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);                 /* 额外打开空闲中断 */
+    HAL_UART_Receive_DMA(huart, s_rx_buf, UART_RX_BUF_SIZE);   /* 交给 DMA 一直收 */
+}
+
+/* 中断里调用：把 len 个字节逐个塞进环形缓冲 */
+static void BSP_UART_Push(const uint8_t *data, uint16_t len)
+{
+    for (uint16_t i = 0; i &lt; len; i++) {
+        uint16_t next = (uint16_t)((s_head + 1U) &amp; (UART_RING_SIZE - 1U));
+        if (next != s_tail) {           /* 留一格空位判满，满了丢新字节 */
+            s_ring[s_head] = data[i];
+            s_head = next;
+        }
+    }
+}
+
+/* 中断服务函数里调用：IDLE → 算长度 → 搬走 → 重新挂 DMA */
+void BSP_UART_IdleHandler(UART_HandleTypeDef *huart)
+{
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_IDLE) == RESET) return;
+
+    __HAL_UART_CLEAR_IDLEFLAG(huart);              /* F1 要读 SR 再读 DR 才清得掉 */
+    HAL_UART_DMAStop(huart);                       /* 先停 DMA，计数器才冻结 */
+    s_last_len = (uint16_t)(UART_RX_BUF_SIZE - __HAL_DMA_GET_COUNTER(huart-&gt;hdmarx));
+    BSP_UART_Push(s_rx_buf, s_last_len);           /* 中断里只搬数据，不解析 */
+    HAL_UART_Receive_DMA(huart, s_rx_buf, UART_RX_BUF_SIZE);  /* 重新武装等下一包 */
+}
+
+/* 主循环里调用：取一个字节，没有数据返回 -1 */
+int BSP_UART_GetByte(void)
+{
+    if (s_head == s_tail) return -1;               /* 空 */
+    uint8_t b = s_ring[s_tail];
+    s_tail = (uint16_t)((s_tail + 1U) &amp; (UART_RING_SIZE - 1U));
+    return (int)b;
+}
+
+/* 主循环里调用：攒够一整行（以 &#39;\r&#39; 或 &#39;\n&#39; 结尾）才返回长度，否则返回 0 */
+uint16_t BSP_UART_GetLine(char *line, uint16_t max_len)
+{
+    static uint16_t n = 0;                         /* 当前行已写字符数 */
+    int b;
+
+    if (line == 0 || max_len &lt; 2U) return 0;
+
+    while ((b = BSP_UART_GetByte()) &gt;= 0) {
+        if (b == &#39;\r&#39; || b == &#39;\n&#39;) {
+            if (n == 0U) continue;                 /* 空行、连续换行都跳过 */
+            uint16_t len = n;
+            line[n] = &#39;\0&#39;;
+            n = 0;
+            return len;
+        }
+        if (n &lt; (uint16_t)(max_len - 1U)) {
+            line[n++] = (char)b;                   /* 存不下就丢弃，绝不越界 */
+        }
+    }
+    return 0;
+}
+
+uint16_t BSP_UART_RxLen(void) { return s_last_len; }
+</code></pre>
+<p><strong>文件：<code>Core/Src/stm32f1xx_it.c</code></strong>（CubeMX 已生成骨架，只把 USER CODE 段填进去）</p>
+<pre><code class="language-c">#include &quot;main.h&quot;
+#include &quot;usart.h&quot;
+#include &quot;bsp_uart.h&quot;
+
+void USART1_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART1_IRQn 0 */
+  BSP_UART_IdleHandler(&amp;huart1);      /* IDLE 判定、读长度、重挂 DMA 都在驱动里 */
+  /* USER CODE END USART1_IRQn 0 */
+
+  HAL_UART_IRQHandler(&amp;huart1);       /* CubeMX 原有的一行，不能删 */
+
+  /* USER CODE BEGIN USART1_IRQn 1 */
+  /* USER CODE END USART1_IRQn 1 */
+}
+</code></pre>
+<p><strong>文件：<code>Core/Src/main.c</code></strong>（最小骨架，可直接编译）</p>
+<pre><code class="language-c">#include &quot;main.h&quot;
+#include &quot;dma.h&quot;
+#include &quot;gpio.h&quot;
+#include &quot;usart.h&quot;
+#include &quot;bsp_uart.h&quot;
+#include &lt;stdio.h&gt;
+
+static void SystemClock_Config(void);
+
+int main(void)
+{
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_DMA_Init();            /* 必须在 MX_USART1_UART_Init 之前 */
+  MX_USART1_UART_Init();    /* 115200-8-N-1，BRR = 39&lt;&lt;4|1 = 0x271 */
+
+  /* USER CODE BEGIN 2 */
+  BSP_UART_Init(&amp;huart1);   /* 打开 IDLE 中断 + 启动 DMA 接收 */
+  printf(&quot;STM32 ready\r\n&quot;);
+  /* USER CODE END 2 */
+
+  while (1)
+  {
+    char line[UART_LINE_SIZE];
+    if (BSP_UART_GetLine(line, sizeof(line)) &gt; 0) {
+      printf(&quot;RX: %s\r\n&quot;, line);   /* 先回显；命令解析见第 7 节 */
+    }
+    HAL_Delay(1);
+  }
+}
+
+static void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef osc = {0};
+  RCC_ClkInitTypeDef clk = {0};
+
+  /* HSE 8MHz × 9 = 72MHz；APB1 二分频 36MHz，APB2 不分频 72MHz */
+  osc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  osc.HSEState = RCC_HSE_ON;
+  osc.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  osc.PLL.PLLState = RCC_PLL_ON;
+  osc.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  osc.PLL.PLLMUL = RCC_PLL_MUL9;
+  if (HAL_RCC_OscConfig(&amp;osc) != HAL_OK) Error_Handler();
+
+  clk.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                  RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  clk.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  clk.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  clk.APB1CLKDivider = RCC_HCLK_DIV2;
+  clk.APB2CLKDivider = RCC_HCLK_DIV1;
+  if (HAL_RCC_ClockConfig(&amp;clk, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
+}
+
+void Error_Handler(void)
+{
+  __disable_irq();
+  while (1) { }
+}
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">为什么是这几句</h3><ul>
+<li><code>UART_RX_BUF_SIZE - __HAL_DMA_GET_COUNTER(...)</code>：DMA 每搬一个字节计数器减 1，所以<strong>剩余量</strong>才是 <code>COUNTER</code>，<code>总数 − 剩余</code> 就是收到的字节数。写反了会得到一个 100 多的假长度，现象是打印一堆乱码或数组越界。</li>
+<li>先 <code>HAL_UART_DMAStop</code> 再读计数：DMA 还在跑时计数随时变，读出来的长度可能差一两个字节。停掉后计数冻结，长度才准；读完立刻重新 <code>Receive_DMA</code>，否则下一包没人收。</li>
+<li>必须 <code>__HAL_UART_CLEAR_IDLEFLAG</code>：F1 的清标志动作是&quot;读 SR 再读 DR&quot;，不清的话 IDLE 一直挂着，中断会连续触发，主循环饿死。</li>
+<li>保留 <code>HAL_UART_IRQHandler(&amp;huart1)</code>：它负责处理溢出/噪声等错误标志并更新 HAL 状态。删掉它，出错后 HAL 认为串口还在忙，之后 <code>Receive_DMA</code> 全部返回 <code>HAL_BUSY</code>。</li>
+</ul>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么不用 `HAL_UART_Receive_IT`</h3><p><code>HAL_UART_Receive_IT(&amp;huart1, buf, 10)</code> 是<strong>定长</strong>的：收满 10 字节才回调一次。对 <code>&quot;OK\r\n&quot;</code>（4 字节）永远等不到；对 200 字节的长包又只给你前 10 个。想用中断做不定长，只能&quot;每次收 1 字节、在回调里再挂一次&quot;，115200 下每秒 11520 次中断，CPU 一半时间在进进出出。<strong>IDLE + DMA 是同一件事的省力版本：搬运不花 CPU，只在包尾打断一次。</strong></p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">哪些代码&quot;故意没写&quot;</h3><p><code>MX_USART1_UART_Init()</code> 负责 BRR/字长/停止位；<code>HAL_UART_MspInit()</code>（在 <code>Core/Src/usart.c</code>）负责开 USART1 和 DMA 时钟、把 PA9/PA10 配成复用推挽、把 <code>hdma_usart1_rx</code> 绑到 <code>huart1.hdmarx</code>；<code>MX_DMA_Init()</code> 开 DMA1 时钟和 NVIC。<strong>这些手写只会漏</strong>：漏了 <code>MX_DMA_Init</code> 的典型现象是 <code>HAL_UART_Receive_DMA</code> 返回 <code>HAL_ERROR</code>、一个字节也收不到。</p>
+<p><code>SystemClock_Config()</code> 决定 PCLK2 = 72MHz，BRR 就是按这个频率算出来的。手动把主频改低、却没让 CubeMX 重新生成 BRR，现象就是第 2 节说的&quot;全乱码&quot;——<strong>时钟和波特率是一对，改一个必须改另一个</strong>。</p>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么&quot;空闲中断&quot;能判断一包结束</h3><p>UART 协议里，一帧结束后线上是高电平。如果连续 <strong>1 个字节的时间</strong>都是高电平，硬件就判定&quot;总线空闲&quot;，置 IDLE 标志。</p>
+<p>对手发的数据包，字节之间是连续的（间隔远小于 1 个字节时间），包与包之间才有明显间隔。所以 IDLE 几乎就是&quot;一包结束&quot;的信号。</p>
+<p>代价：如果对方发得极慢（字节间隔超过 1 个字符时间），一包会被拆成好几段。多数上位机不会这样。</p>
+</section>
+<h3>4.2 环形缓冲区：中断里只搬数据，主循环慢慢处理</h3>
+<p>即使有了 IDLE，中断里也不该做解析（printf、字符串处理都太慢）。标准做法是<strong>中断只往环形缓冲区塞字节，主循环从里面取</strong>。这套逻辑已经完整写在上面 <code>Hardware/Src/bsp_uart.c</code> 里：中断走 <code>BSP_UART_Push</code>，主循环走 <code>BSP_UART_GetByte</code> / <code>BSP_UART_GetLine</code>。这里把指针语义钉死：</p>
+<table>
+<thead>
+<tr>
+<th>动作</th>
+<th>谁做</th>
+<th>指针怎么动</th>
+<th>判据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>塞一个字节</td>
+<td>中断</td>
+<td><code>head</code> 前进一格</td>
+<td>满：<code>head+1 == tail</code>，丢弃新字节</td>
+</tr>
+<tr>
+<td>取一个字节</td>
+<td>主循环</td>
+<td><code>tail</code> 前进一格</td>
+<td>空：<code>head == tail</code>，返回 -1</td>
+</tr>
+<tr>
+<td>前进一格</td>
+<td>—</td>
+<td><code>(p + 1) &amp; (SIZE - 1)</code></td>
+<td>SIZE 必须是 2 的幂</td>
+</tr>
+</tbody></table>
+<p><code>BSP_UART_Push</code> 和 <code>BSP_UART_GetByte</code> 从头到尾只做这一件事，所以中断里执行时间是常数（几个周期），不会因为数据多而变慢。</p>
+
+<section class="callout note"><h3 class="callout-title">为什么用 `&amp; (UART_RING_SIZE-1)`，不用 `%`</h3><p><code>UART_RING_SIZE = 256</code> 时 <code>x &amp; 255</code> 和 <code>x % 256</code> 结果完全一样，但取模要除法（几十个周期），与运算只要 1 个周期。中断里每秒可能进上千次，这个差别值得较真。</p>
+<p>前提是 <code>UART_RING_SIZE</code> 必须是 <strong>2 的幂</strong>；写成 200 就取不出正确的回绕位置，现象是<strong>下标跑到 200 以后数组被写坏，程序随机死机</strong>。改不了 2 的幂，就老老实实写 <code>% UART_RING_SIZE</code>。</p>
+<p>没有关中断：这是&quot;单生产者/单消费者&quot;，中断只动 head、主循环只动 tail，<code>uint16_t</code> 写是一条指令、原子完成，所以不需要 <code>__disable_irq()</code>；一旦有两个中断都往里塞，就必须加临界区。</p>
+</section>
+
+<section class="callout warn"><h3 class="callout-title">环形缓冲区的三个常见错误</h3><ol>
+<li><strong><code>head</code>/<code>tail</code> 不加 <code>volatile</code></strong>：编译器优化后主循环永远读到旧值，表现为&quot;数据进来了但取不出来&quot;。</li>
+<li><strong>在中断里调用 <code>printf</code></strong>：<code>printf</code> 内部有锁、耗时长，会把中断拖到几十微秒，高波特率下直接丢字节。<strong>中断里只做搬运</strong>。</li>
+<li><strong>在中断里也改 <code>tail</code>（或在主循环里也改 <code>head</code>）</strong>：这就成了多生产者/多消费者，必须加临界区。本写法只允许&quot;中断只动 head、主循环只动 tail&quot;，两个 16 位写是原子的，所以<strong>不用关中断</strong>。</li>
+</ol>
+</section>
+<hr>
+<h2 id="sec-5">5. printf 重定向：让板子会说话</h2>
+<p><code>printf</code> 最终会调用底层的&quot;写一个字符&quot;函数。GCC（CubeIDE 用的编译器）里是 <code>_write</code>，Keil 里是 <code>fputc</code>。把它改成往串口发就行。</p>
+<p>CubeIDE（GCC）版本，单独放一个文件，别塞进 main.c：</p>
+<p><strong>文件：<code>Hardware/Src/retarget.c</code></strong></p>
+<pre><code class="language-c">#include &quot;usart.h&quot;           /* huart1 在这里 extern 声明 */
+#include &lt;stdio.h&gt;           /* printf/_write 的声明 */
+
+/* GCC/newlib 的底层&quot;写&quot;接口：printf 组好一串字符后调它 */
+int _write(int file, char *ptr, int len)
+{
+    (void)file;          /* 只有一个串口，用不到这个参数 */
+    HAL_UART_Transmit(&amp;huart1, (uint8_t *)ptr, (uint16_t)len, HAL_MAX_DELAY);
+    return len;          /* 必须返回 len，返回 0/负数 printf 会认为写失败 */
+}
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">为什么这里用阻塞发送，而不是 IT 或 DMA</h3><p><code>_write</code> 可能在主循环任意位置被调用，甚至一次 <code>printf</code> 里被调用多次。用 <code>HAL_UART_Transmit_IT</code> 时，前一次还没发完就又来一次，HAL 直接返回 <code>HAL_BUSY</code>，现象是<strong>输出缺行、少几个字</strong>；用 DMA 同样会冲突。而 <code>HAL_MAX_DELAY</code> 是&quot;等到发完&quot;，代价是这句卡住 CPU：115200 下打印 50 个字符约 4.3ms。调试输出这点延迟可以接受，<strong>但绝对不能在中断里 printf</strong>（那 4.3ms 会变成丢字节）。</p>
+<p>另外 <code>printf(&quot;%f&quot;)</code> 默认不链接浮点格式化（省 Flash），现象是打印出空白或乱码；要么在链接选项加 <code>-u _printf_float</code>，要么自己拆整数和小数打印。</p>
+</section>
+<p>Keil（ARMCC）版本——路径还是 <code>Hardware/Src/retarget.c</code>，但<strong>只在 Keil 工程里用这一份</strong>（把上面 GCC 版的内容整体换掉）：</p>
+<p><strong>文件：<code>Hardware/Src/retarget.c</code>（Keil 工程专用，二选一）</strong></p>
+<pre><code class="language-c">#include &quot;usart.h&quot;
+#include &lt;stdio.h&gt;
+
+int fputc(int ch, FILE *f)
+{
+    (void)f;
+    HAL_UART_Transmit(&amp;huart1, (uint8_t *)&amp;ch, 1, HAL_MAX_DELAY);
+    return ch;
+}
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">两个版本为什么只挑一个</h3><p>GCC（CubeIDE）的 <code>printf</code> 最终走 <code>_write</code>；Keil 的 C 库走 <code>fputc</code>。在 CubeIDE 里写 <code>fputc</code> 永远不会被调用（现象：重定向了但串口没输出），在 Keil 里不勾 <strong>Use MicroLIB</strong> 时 <code>fputc</code> 也可能不生效。<strong>按编译器二选一</strong>，别两个都写——都写也能编译，但将来换工具链时容易搞不清哪个在起作用。</p>
+</section>
+<p>然后 <code>printf(&quot;temp=%d\r\n&quot;, t);</code> 就能在串口助手里看到。</p>
+
+<section class="callout note"><h3 class="callout-title">为什么要加 `\r\n` 而不是只加 `\n`</h3><p>串口助手（以及很多终端）里，<code>\n</code> 只是&quot;换行&quot;，光标会回到<strong>当前行的下一行</strong>但不停在最左；<code>\r</code> 才是&quot;回车&quot;，把光标移到行首。</p>
+<p>只发 <code>\n</code> 的现象是输出呈阶梯状往右偏。<strong>养成 <code>\r\n</code> 的习惯</strong>。</p>
+<p>另外 <code>printf</code> 里的浮点数默认可能不链接浮点格式化库，输出 <code>%f</code> 会显示空白或乱码。要么在链接选项里加 <code>-u _printf_float</code>，要么自己把浮点拆成整数和小数打印——后者更省 Flash，工程里更常见。</p>
+</section>
+<hr>
+<h2 id="sec-6">6. 算一算</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：一位有多宽</h3><p>115200-8-N-1，传一个字符要多久？每秒最多传多少字节？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><strong>一帧 10 位</strong>：1 起始 + 8 数据 + 0 校验 + 1 停止。</p>
+<p>一位时间：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mn>115200</mn><mo>≈</mo><mn>8.68</mn><mi>μ</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">1 / 115200 \approx 8.68\mu s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1/115200</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">8.68</span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span></span></span></span></span></p>
+<p>一帧时间：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>10</mn><mo>×</mo><mn>8.68</mn><mi>μ</mi><mi>s</mi><mo>=</mo><mn>86.8</mn><mi>μ</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">10 \times 8.68\mu s = 86.8\mu s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">10</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">8.68</span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">86.8</span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span></span></span></span></span></p>
+<p>每秒字符数：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>115200</mn><mi mathvariant="normal">/</mi><mn>10</mn><mo>=</mo><mn>11520</mn><mtext> 字节/秒</mtext><mo>≈</mo><mn>11.25</mn><mtext> KB/s</mtext></mrow><annotation encoding="application/x-tex">115200 / 10 = 11520 \text{ 字节/秒} \approx 11.25\text{ KB/s}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">115200/10</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">11520</span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">字节</span><span class="mord">/</span><span class="mord cjk_fallback">秒</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">11.25</span><span class="mord text"><span class="mord"> KB/s</span></span></span></span></span></span></p>
+<p>所以发一句 50 个字符的调试信息，占用总线约 4.3ms。如果每 10ms 打印一次，总线占用率 43%——这就该考虑降频打印或改二进制协议了。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：波特率误差</h3><p>某模块要求 9600，但你的板子 USART2 实际跑在 36MHz，你却按 72MHz 算了 BRR。会发生什么？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>按 72MHz 算出的 <code>USARTDIV = 468.75</code>，但实际时钟只有 36MHz：</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>实际波特率</mtext><mo>=</mo><mfrac><mrow><mn>36</mn><mtext> </mtext><mn>000</mn><mtext> </mtext><mn>000</mn></mrow><mrow><mn>16</mn><mo>×</mo><mn>468.75</mn></mrow></mfrac><mo>=</mo><mn>4800</mn></mrow><annotation encoding="application/x-tex">\text{实际波特率} = \frac{36\,000\,000}{16 \times 468.75} = 4800</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">实际波特率</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0908em;vertical-align:-0.7693em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">16</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">468.75</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">36</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">000</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">000</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4800</span></span></span></span></span></p>
+<p><strong>实际跑成了 4800，只有目标的一半</strong>，误差 50%，远超 2% 的容忍度。</p>
+<p>现象：收到的<strong>每一个字节都是错的</strong>，串口助手显示一堆乱码或方块，偶尔因为位模式碰巧对上能认出一两个字符。</p>
+<p><strong>排查方法</strong>：拿示波器/逻辑分析仪量 TX 上一位的宽度。9600 应该是 104μs，如果量到 208μs，就是时钟或分频算错了一倍。<strong>先用&quot;一位多宽&quot;验证，比盯着乱码猜快得多。</strong></p>
+</div></details></section>
+<hr>
+<h2 id="sec-7">7. 动手项目</h2>
+
+<section class="callout project"><h3 class="callout-title">动手项目</h3><p><strong>串口命令行小工具</strong></p>
+<p>在 PA9(TX)/PA10(RX) 接 USB-TTL（注意 <strong>TX 接模块 RX、RX 接模块 TX、GND 共地</strong>），实现：</p>
+<ol>
+<li><code>printf</code> 重定向，上电打印 <code>&quot;STM32 ready\r\n&quot;</code>。</li>
+<li>用 IDLE + DMA 收不定长命令，支持：<ul>
+<li><code>led on</code> / <code>led off</code> → 控制 PC13</li>
+<li><code>pwm 50</code> → 把 PA0 的占空比设为 50%</li>
+<li><code>status</code> → 回 <code>&quot;led=1 pwm=50\r\n&quot;</code></li>
+</ul>
+</li>
+<li>收到无法识别的命令回 <code>&quot;ERR\r\n&quot;</code>。</li>
+</ol>
+<p><strong>验收标准</strong>：</p>
+<ol>
+<li>用串口助手发 <code>led on</code>，板载 LED 亮；发 <code>led off</code>，灭。</li>
+<li>连续快速发 10 条命令，<strong>不丢包、不粘包</strong>（说明环形缓冲和 IDLE 处理正确）。</li>
+<li>发一条 200 字节的长命令，缓冲区不溢出、程序不死机。</li>
+<li>关掉串口助手再重开，板子仍能正常响应（说明没有卡在阻塞接收里）。</li>
+</ol>
+<p><strong>加分</strong>：加一个 <code>reboot</code> 命令，用 <code>NVIC_SystemReset()</code> 软复位。</p>
+<p><strong>文件放置表</strong></p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>文件夹</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>bsp_uart.h</code></td>
+<td><code>Hardware/Inc/</code></td>
+<td>串口驱动接口：缓冲区尺寸、函数声明</td>
+</tr>
+<tr>
+<td><code>main.h</code></td>
+<td><code>Core/Inc/</code></td>
+<td>LED/PWM 引脚宏、<code>Error_Handler</code> 声明</td>
+</tr>
+<tr>
+<td><code>app_cmd.h</code></td>
+<td><code>App/Inc/</code></td>
+<td>命令解析接口</td>
+</tr>
+<tr>
+<td><code>bsp_uart.c</code></td>
+<td><code>Hardware/Src/</code></td>
+<td>IDLE + DMA 接收、环形缓冲、取行</td>
+</tr>
+<tr>
+<td><code>retarget.c</code></td>
+<td><code>Hardware/Src/</code></td>
+<td><code>printf</code> 重定向（<code>_write</code>）</td>
+</tr>
+<tr>
+<td><code>app_cmd.c</code></td>
+<td><code>App/Src/</code></td>
+<td>解析 <code>led/pwm/status/reboot</code> 并执行</td>
+</tr>
+<tr>
+<td><code>main.c</code></td>
+<td><code>Core/Src/</code></td>
+<td>初始化调用、主循环</td>
+</tr>
+<tr>
+<td><code>stm32f1xx_it.c</code></td>
+<td><code>Core/Src/</code></td>
+<td>只在 <code>USART1_IRQHandler</code> 里插一行（CubeMX 生成）</td>
+</tr>
+<tr>
+<td><code>usart.c/h</code>、<code>dma.c/h</code>、<code>tim.c/h</code>、<code>gpio.c/h</code></td>
+<td><code>Core/Src</code>、<code>Core/Inc</code></td>
+<td>CubeMX 生成，不手写</td>
+</tr>
+</tbody></table>
+<p>下面全部文件按 头文件 → 驱动 .c → App .c → main.c 的顺序给出完整内容。</p>
+<p><strong>文件：<code>Hardware/Inc/bsp_uart.h</code></strong></p>
+<pre><code class="language-c">#ifndef __BSP_UART_H
+#define __BSP_UART_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+#define UART_RX_BUF_SIZE   128U   /* DMA 落点：一包最多 128 字节 */
+#define UART_RING_SIZE     256U   /* 环形缓冲，必须是 2 的幂 */
+#define UART_LINE_SIZE     64U    /* 一条命令最长 63 字符 + 结尾 &#39;\0&#39; */
+
+void     BSP_UART_Init(UART_HandleTypeDef *huart);
+void     BSP_UART_IdleHandler(UART_HandleTypeDef *huart);
+int      BSP_UART_GetByte(void);
+uint16_t BSP_UART_GetLine(char *line, uint16_t max_len);
+uint16_t BSP_UART_RxLen(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __BSP_UART_H */
+</code></pre>
+<p><strong>文件：<code>Core/Inc/main.h</code></strong></p>
+<pre><code class="language-c">#ifndef __MAIN_H
+#define __MAIN_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;stm32f1xx_hal.h&quot;
+
+/* 板载 LED：PC13，低电平点亮 */
+#define LED_PIN          GPIO_PIN_13
+#define LED_GPIO_PORT    GPIOC
+
+/* PWM 输出：PA0 = TIM2_CH1 */
+#define PWM_PIN          GPIO_PIN_0
+#define PWM_GPIO_PORT    GPIOA
+#define PWM_PERIOD_CNT   1000U      /* ARR = 999，1 个计数 = 0.1% 占空比 */
+
+void Error_Handler(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __MAIN_H */
+</code></pre>
+<p><strong>文件：<code>App/Inc/app_cmd.h</code></strong></p>
+<pre><code class="language-c">#ifndef __APP_CMD_H
+#define __APP_CMD_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+
+#include &quot;main.h&quot;
+
+void App_CmdInit(void);   /* 上电初始化：LED 灭、PWM 0%、启动 PWM 输出 */
+void App_CmdPoll(void);   /* 主循环调用：取一行命令并执行 */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __APP_CMD_H */
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/bsp_uart.c</code></strong></p>
+<pre><code class="language-c">#include &quot;bsp_uart.h&quot;
+
+static uint8_t  s_rx_buf[UART_RX_BUF_SIZE];         /* DMA 直接写入的落点 */
+static uint8_t  s_ring[UART_RING_SIZE];             /* 环形缓冲：中断→主循环 */
+static volatile uint16_t s_head = 0;                /* 写指针，只由中断改 */
+static volatile uint16_t s_tail = 0;                /* 读指针，只由主循环改 */
+static volatile uint16_t s_last_len = 0;            /* 上一包字节数 */
+
+void BSP_UART_Init(UART_HandleTypeDef *huart)
+{
+    s_head = 0;
+    s_tail = 0;
+    __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);                 /* 打开空闲中断 */
+    HAL_UART_Receive_DMA(huart, s_rx_buf, UART_RX_BUF_SIZE);   /* 交给 DMA 一直收 */
+}
+
+/* 中断里调用：把 len 个字节逐个塞进环形缓冲 */
+static void BSP_UART_Push(const uint8_t *data, uint16_t len)
+{
+    for (uint16_t i = 0; i &lt; len; i++) {
+        uint16_t next = (uint16_t)((s_head + 1U) &amp; (UART_RING_SIZE - 1U));
+        if (next != s_tail) {           /* 留一格空位判满，满了丢新字节 */
+            s_ring[s_head] = data[i];
+            s_head = next;
+        }
+    }
+}
+
+/* 中断服务函数里调用：IDLE → 算长度 → 搬走 → 重新挂 DMA */
+void BSP_UART_IdleHandler(UART_HandleTypeDef *huart)
+{
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_IDLE) == RESET) return;
+
+    __HAL_UART_CLEAR_IDLEFLAG(huart);              /* F1 要读 SR 再读 DR 才清得掉 */
+    HAL_UART_DMAStop(huart);                       /* 先停 DMA，计数器才冻结 */
+    s_last_len = (uint16_t)(UART_RX_BUF_SIZE - __HAL_DMA_GET_COUNTER(huart-&gt;hdmarx));
+    BSP_UART_Push(s_rx_buf, s_last_len);           /* 中断里只搬数据，不解析 */
+    HAL_UART_Receive_DMA(huart, s_rx_buf, UART_RX_BUF_SIZE);  /* 重新武装等下一包 */
+}
+
+/* 主循环里调用：取一个字节，没有数据返回 -1 */
+int BSP_UART_GetByte(void)
+{
+    if (s_head == s_tail) return -1;               /* 空 */
+    uint8_t b = s_ring[s_tail];
+    s_tail = (uint16_t)((s_tail + 1U) &amp; (UART_RING_SIZE - 1U));
+    return (int)b;
+}
+
+/* 主循环里调用：攒够一整行（以 &#39;\r&#39; 或 &#39;\n&#39; 结尾）才返回长度，否则返回 0 */
+uint16_t BSP_UART_GetLine(char *line, uint16_t max_len)
+{
+    static uint16_t n = 0;                         /* 当前行已写字符数 */
+    int b;
+
+    if (line == 0 || max_len &lt; 2U) return 0;
+
+    while ((b = BSP_UART_GetByte()) &gt;= 0) {
+        if (b == &#39;\r&#39; || b == &#39;\n&#39;) {
+            if (n == 0U) continue;                 /* 空行、连续换行都跳过 */
+            uint16_t len = n;
+            line[n] = &#39;\0&#39;;
+            n = 0;
+            return len;
+        }
+        if (n &lt; (uint16_t)(max_len - 1U)) {
+            line[n++] = (char)b;                   /* 存不下就丢弃，绝不越界 */
+        }
+    }
+    return 0;
+}
+
+uint16_t BSP_UART_RxLen(void) { return s_last_len; }
+</code></pre>
+<p><strong>文件：<code>Hardware/Src/retarget.c</code></strong>（GCC / CubeIDE；Keil 工程换成 <code>fputc</code> 版本）</p>
+<pre><code class="language-c">#include &quot;usart.h&quot;           /* huart1 在这里 extern 声明 */
+#include &lt;stdio.h&gt;
+
+int _write(int file, char *ptr, int len)
+{
+    (void)file;
+    HAL_UART_Transmit(&amp;huart1, (uint8_t *)ptr, (uint16_t)len, HAL_MAX_DELAY);
+    return len;              /* 必须返回 len，否则 printf 认为写失败 */
+}
+</code></pre>
+<p><strong>文件：<code>App/Src/app_cmd.c</code></strong></p>
+<pre><code class="language-c">#include &quot;app_cmd.h&quot;
+#include &quot;bsp_uart.h&quot;
+#include &quot;tim.h&quot;
+#include &quot;main.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdlib.h&gt;
+
+static uint8_t s_led = 0;      /* 当前 LED 状态：1 亮 0 灭 */
+static uint8_t s_pwm = 0;      /* 当前占空比 0~100 */
+
+static void App_LedSet(uint8_t on)
+{
+    s_led = on;
+    /* PC13 低电平点亮：亮给 RESET，灭给 SET */
+    HAL_GPIO_WritePin(LED_GPIO_PORT, LED_PIN, on ? GPIO_PIN_RESET : GPIO_PIN_SET);
+}
+
+static void App_PwmSet(uint8_t duty)
+{
+    s_pwm = duty;
+    /* TIM2：PSC=71、ARR=999 → 72MHz/72/1000 = 1kHz；
+       CCR = 占空比 × 10（1000 个计数里占 10 个 = 1%） */
+    __HAL_TIM_SET_COMPARE(&amp;htim2, TIM_CHANNEL_1, (uint32_t)duty * 10U);
+}
+
+void App_CmdInit(void)
+{
+    App_LedSet(0);
+    App_PwmSet(0);
+    HAL_TIM_PWM_Start(&amp;htim2, TIM_CHANNEL_1);   /* PA0 开始输出 PWM */
+}
+
+void App_CmdPoll(void)
+{
+    char line[UART_LINE_SIZE];
+    uint16_t len = BSP_UART_GetLine(line, sizeof(line));
+    if (len == 0) return;                       /* 还没有完整的一行 */
+
+    if (strcmp(line, &quot;led on&quot;) == 0) {
+        App_LedSet(1);
+        printf(&quot;led=1\r\n&quot;);
+    } else if (strcmp(line, &quot;led off&quot;) == 0) {
+        App_LedSet(0);
+        printf(&quot;led=0\r\n&quot;);
+    } else if (strncmp(line, &quot;pwm &quot;, 4) == 0) {
+        int d = atoi(&amp;line[4]);                 /* &quot;pwm 50&quot; → 50 */
+        if (d &lt; 0)   d = 0;
+        if (d &gt; 100) d = 100;
+        App_PwmSet((uint8_t)d);
+        printf(&quot;pwm=%d\r\n&quot;, d);
+    } else if (strcmp(line, &quot;status&quot;) == 0) {
+        printf(&quot;led=%d pwm=%d\r\n&quot;, s_led, s_pwm);
+    } else if (strcmp(line, &quot;reboot&quot;) == 0) {
+        printf(&quot;rebooting\r\n&quot;);
+        HAL_Delay(20);                          /* 等最后几个字节发完 */
+        NVIC_SystemReset();                     /* CMSIS 软复位 */
+    } else {
+        printf(&quot;ERR\r\n&quot;);                      /* 无法识别 */
+    }
+}
+</code></pre>
+<p><strong>文件：<code>Core/Src/main.c</code></strong></p>
+<pre><code class="language-c">#include &quot;main.h&quot;
+#include &quot;dma.h&quot;
+#include &quot;gpio.h&quot;
+#include &quot;tim.h&quot;
+#include &quot;usart.h&quot;
+#include &quot;bsp_uart.h&quot;
+#include &quot;app_cmd.h&quot;
+#include &lt;stdio.h&gt;
+
+static void SystemClock_Config(void);
+
+int main(void)
+{
+  HAL_Init();
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_DMA_Init();              /* 必须先于 MX_USART1_UART_Init */
+  MX_USART1_UART_Init();      /* 115200-8-N-1，BRR = (39&lt;&lt;4)|1 = 0x271 */
+  MX_TIM2_Init();             /* PSC=71、ARR=999，PA0 复用推挽 */
+
+  /* USER CODE BEGIN 2 */
+  BSP_UART_Init(&amp;huart1);     /* 打开 IDLE 中断 + 启动 DMA 接收 */
+  App_CmdInit();              /* LED 初始化 + 启动 PWM */
+  printf(&quot;STM32 ready\r\n&quot;);
+  /* USER CODE END 2 */
+
+  while (1)
+  {
+    App_CmdPoll();            /* 取一行 → 解析 → 执行，永不阻塞 */
+    HAL_Delay(1);
+  }
+}
+
+static void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef osc = {0};
+  RCC_ClkInitTypeDef clk = {0};
+
+  /* HSE 8MHz × 9 = 72MHz；APB1 = 36MHz（USART2），APB2 = 72MHz（USART1） */
+  osc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  osc.HSEState = RCC_HSE_ON;
+  osc.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  osc.PLL.PLLState = RCC_PLL_ON;
+  osc.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  osc.PLL.PLLMUL = RCC_PLL_MUL9;
+  if (HAL_RCC_OscConfig(&amp;osc) != HAL_OK) Error_Handler();
+
+  clk.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                  RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  clk.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  clk.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  clk.APB1CLKDivider = RCC_HCLK_DIV2;
+  clk.APB2CLKDivider = RCC_HCLK_DIV1;
+  if (HAL_RCC_ClockConfig(&amp;clk, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
+}
+
+void Error_Handler(void)
+{
+  __disable_irq();
+  while (1) { }
+}
+</code></pre>
+<p><strong>文件：<code>Core/Src/stm32f1xx_it.c</code></strong>（CubeMX 生成，只需这一处 USER CODE 改动）</p>
+<pre><code class="language-c">#include &quot;main.h&quot;
+#include &quot;usart.h&quot;
+#include &quot;bsp_uart.h&quot;
+
+void USART1_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART1_IRQn 0 */
+  BSP_UART_IdleHandler(&amp;huart1);
+  /* USER CODE END USART1_IRQn 0 */
+
+  HAL_UART_IRQHandler(&amp;huart1);      /* CubeMX 原有的一行，不能删 */
+
+  /* USER CODE BEGIN USART1_IRQn 1 */
+  /* USER CODE END USART1_IRQn 1 */
+}
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">这个项目里哪些代码是 CubeMX 生成的</h3><ul>
+<li><code>MX_USART1_UART_Init()</code>（在 <code>usart.c</code>）：115200、8 位、无校验、1 停止位。BRR 由 CubeMX 按 PCLK2 = 72MHz 算成 <code>0x271</code>（<code>USARTDIV = 72M/(16×115200) = 39.0625</code>）。</li>
+<li><code>HAL_UART_MspInit()</code>（在 <code>usart.c</code>）：开 USART1 和 DMA1 时钟、PA9/PA10 配复用推挽、<code>hdma_usart1_rx</code> 绑到 <code>huart1.hdmarx</code>。</li>
+<li><code>MX_DMA_Init()</code>（在 <code>dma.c</code>）：开 DMA1 时钟、配 NVIC。<strong>漏掉它的现象是 <code>HAL_UART_Receive_DMA</code> 返回 <code>HAL_ERROR</code>，一个字节都收不到。</strong></li>
+<li><code>MX_TIM2_Init()</code>（在 <code>tim.c</code>）：TIM2 CH1 PWM，PSC = 71、ARR = 999 → 1kHz；PA0 复用推挽。</li>
+<li><code>SystemClock_Config()</code> 放在 <code>main.c</code> 里（CubeMX 也生成它），决定 PCLK1 = 36MHz、PCLK2 = 72MHz。<strong>改了主频就必须重新生成 BRR</strong>，否则就是第 2 节说的&quot;全乱码&quot;。</li>
+</ul>
+</section>
+
+<section class="callout note"><h3 class="callout-title">为什么这样拆文件</h3><ul>
+<li><code>bsp_uart.c</code> 只管&quot;字节怎么进来、怎么排成一行&quot;，不关心命令含义；<code>app_cmd.c</code> 只管&quot;这一行是什么意思、要做什么&quot;。所以换协议只改 App，换串口只改 Hardware。</li>
+<li><code>main.c</code> 里没有环形缓冲、没有中断逻辑、没有 <code>printf</code> 重定向，只剩初始化和一个 <code>while(1)</code>——出了问题是先去 App 找解析、再去 Hardware 找驱动，责任边界清楚。</li>
+<li><code>stm32f1xx_it.c</code> 只留一行调用：CubeMX 重新生成工程时，USER CODE 段不会被覆盖，业务逻辑也不会丢。</li>
+</ul>
+</section></section>
+<hr>
+<h2 id="sec-8">8. 本课小结</h2>
+<ul>
+<li>一帧 = 起始位(0) + 8 位数据（<strong>低位在前</strong>）+ 可选校验 + 停止位(1)；空闲为高。</li>
+<li><code>USARTDIV = fPCLK / (16 × baud)</code>；USART1 是 72MHz，USART2/3 是 36MHz，<strong>别搞混</strong>。</li>
+<li>BRR = 整数部分 &lt;&lt; 4 | 小数×16；反算误差要 <strong>&lt; 2%</strong>。</li>
+<li>115200 时一位 8.68μs，一帧 86.8μs，约 11.5KB/s。</li>
+<li>收数据<strong>不能用轮询</strong>；<code>HAL_UART_Receive_IT</code> 是<strong>定长</strong>的，不定长要用 <strong>IDLE + DMA</strong>。</li>
+<li>中断里只搬字节进<strong>环形缓冲区</strong>，解析放主循环；指针要 <code>volatile</code>。</li>
+<li><code>printf</code> 重定向：GCC 实现 <code>_write</code>，Keil 实现 <code>fputc</code>；换行用 <code>\r\n</code>。</li>
+<li>乱码先查波特率，再查 TX/RX 交叉，再查共地。</li>
+</ul>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能画出一帧 8-N-1 的波形并标出每一位</li>
+<li><input disabled="" type="checkbox"> 我能手算 115200 的 BRR 并验证误差</li>
+<li><input disabled="" type="checkbox"> 我知道 USART1 和 USART2 的时钟为什么不同</li>
+<li><input disabled="" type="checkbox"> 我能说出 HAL 定长接收的问题和 IDLE+DMA 的解法</li>
+<li><input disabled="" type="checkbox"> 我能写出环形缓冲区的 put/get 并说明为什么用 <code>&amp; (SIZE-1)</code></li>
+<li><input disabled="" type="checkbox"> 我知道 <code>printf</code> 重定向在 GCC 和 Keil 下分别改哪个函数</li>
+<li><input disabled="" type="checkbox"> 我能按顺序排查&quot;串口全是乱码&quot;</li>
+</ul>
+</section>
+<hr>
+<h2 id="sec-9">9. 下一课预告</h2>
+<p>串口是<strong>点对点</strong>的：一根线，两个设备。接下来要讲的总线是<strong>一主多从</strong>的——一根线上挂好几个芯片，靠地址区分。</p>
+<p>下一课 <code>s13 I2C 总线</code>：你会看到 s3 学的&quot;开漏输出&quot;在这里变成硬性要求，也会第一次接触&quot;时序图&quot;这种描述通信的通用语言。</p>
+
+  
+<nav class="pager">
+  <a class="prev" href="11-input-capture.html">← 输入捕获与编码器模式</a>
+  <a class="next" href="13-i2c.html">I2C 总线：开漏、时序与 OLED 显示 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

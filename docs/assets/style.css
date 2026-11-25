@@ -1,0 +1,301 @@
+:root {
+  --bg: #f7f7f5;
+  --card: #ffffff;
+  --text: #22252a;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #2c6fbb;
+  --accent-soft: #e8f1fb;
+  --code-bg: #f3f4f6;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --key: #047857;
+  --key-soft: #d1fae5;
+  --goal: #6d28d9;
+  --goal-soft: #ede9fe;
+  --project: #be123c;
+  --project-soft: #ffe4e6;
+  --radius: 12px;
+  --max: 860px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181d;
+    --card: #1e2128;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --line: #2f333b;
+    --accent: #7cb3f0;
+    --accent-soft: #1e2a3a;
+    --code-bg: #23262e;
+    --warn-soft: #3a2a13;
+    --key-soft: #123027;
+    --goal-soft: #2a2140;
+    --project-soft: #3a1a22;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar-inner {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.brand { font-weight: 700; letter-spacing: .02em; }
+.crumbs { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+
+.page {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 26px 18px 60px;
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  padding: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ---------- 首页 / 科目页 ---------- */
+
+.hero h1 { font-size: 30px; line-height: 1.25; margin: 6px 0 10px; }
+.hero.home { text-align: center; padding: 26px 0 10px; }
+.subtitle { color: var(--muted); margin: 0 0 10px; }
+.goal { color: var(--muted); font-size: 14px; margin: 0; }
+
+.subject-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.subject-card {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  color: inherit;
+  transition: transform .15s ease, border-color .15s ease;
+}
+.subject-card:hover { transform: translateY(-2px); border-color: var(--accent); text-decoration: none; }
+.subject-title { font-weight: 700; font-size: 17px; margin-bottom: 6px; }
+.subject-sub { color: var(--muted); font-size: 13px; min-height: 38px; }
+.subject-meta { color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+.node-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+
+.node {
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  color: inherit;
+}
+.node:hover { border-color: var(--accent); text-decoration: none; }
+.node.disabled { opacity: .55; }
+.node-title { font-weight: 650; margin-bottom: 3px; }
+.node-summary { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.node-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.node-time { color: var(--muted); font-size: 12px; }
+
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.badge.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+.badge.done { background: var(--key-soft); color: var(--key); }
+.badge.doing { background: var(--warn-soft); color: var(--warn); }
+.badge.todo { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+
+/* ---------- 课件正文 ---------- */
+
+.lesson-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+
+.lesson h1 { font-size: 28px; line-height: 1.3; margin: 8px 0 18px; }
+.lesson h2 {
+  font-size: 22px;
+  margin: 38px 0 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 64px;
+}
+.lesson h3 { font-size: 18px; margin: 26px 0 10px; }
+.lesson p { margin: 10px 0; }
+.lesson ul, .lesson ol { padding-left: 1.4em; }
+.lesson li { margin: 5px 0; }
+
+.lesson table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 14px;
+  display: block;
+  overflow-x: auto;
+}
+.lesson th, .lesson td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.lesson th { background: var(--accent-soft); font-weight: 650; }
+
+.lesson pre {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.lesson code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: .92em;
+}
+.lesson :not(pre) > code {
+  background: var(--code-bg);
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+
+.lesson img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }
+.lesson svg { max-width: 100%; height: auto; }
+
+/* 课件里的内联 SVG 示意图 */
+.lesson svg.diagram { width: 100%; margin: 10px 0 22px; }
+.lesson svg.diagram .box { fill: var(--card); stroke: var(--line); stroke-width: 1.2; }
+.lesson svg.diagram .box.acc { fill: var(--accent-soft); stroke: var(--accent); }
+.lesson svg.diagram .label { fill: var(--text); }
+.lesson svg.diagram .sub { fill: var(--muted); }
+.lesson svg.diagram .arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-linecap: round; }
+.lesson svg.diagram .arrowhead { fill: var(--muted); }
+.lesson svg.diagram .loop { stroke: var(--line); stroke-width: 1.2; fill: none; stroke-dasharray: 5 4; }
+
+.lesson blockquote {
+  margin: 14px 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+
+/* ---------- 提示块 ---------- */
+
+.callout {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px 16px 6px;
+  margin: 18px 0;
+}
+.callout-title {
+  font-size: 14px;
+  margin: 0 0 8px;
+  color: var(--accent);
+  letter-spacing: .02em;
+}
+.callout.key { border-left-color: var(--key); background: var(--key-soft); }
+.callout.key .callout-title { color: var(--key); }
+.callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.callout.warn .callout-title { color: var(--warn); }
+.callout.goal { border-left-color: var(--goal); background: var(--goal-soft); }
+.callout.goal .callout-title { color: var(--goal); }
+.callout.project { border-left-color: var(--project); background: var(--project-soft); }
+.callout.project .callout-title { color: var(--project); }
+.callout.selfcheck { border-left-color: var(--key); }
+
+.answer {
+  background: var(--card);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 12px 0;
+}
+.answer summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.answer-body { padding-top: 6px; }
+
+.toc {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 18px 0 8px;
+  font-size: 14px;
+}
+.toc-title { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.toc ol { margin: 0; padding-left: 1.2em; }
+.toc li { margin: 4px 0; }
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 40px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+.pager .next { text-align: right; }
+
+@media (max-width: 640px) {
+  body { font-size: 15.5px; }
+  .page { padding: 18px 14px 48px; }
+  .hero h1 { font-size: 24px; }
+  .lesson h1 { font-size: 22px; }
+  .lesson h2 { font-size: 19px; }
+  .lesson h3 { font-size: 16.5px; }
+  .node { align-items: flex-start; }
+  .node-side { padding-top: 2px; }
+  .pager { flex-direction: column; }
+  .pager .next { text-align: left; }
+}

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>面试专题：高频问题与项目讲述 · STM32 嵌入式开发</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">STM32 嵌入式开发</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">concept</span>
+    <span class="badge ghost">90 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 两分钟项目讲述：背下这个骨架</a></li><li><a href="#sec-2">2. C 语言：这 6 个必考</a></li><li><a href="#sec-3">3. 单片机原理：三个必考流程</a></li><li><a href="#sec-4">4. 通信与外设：一张对比表打天下</a></li><li><a href="#sec-5">5. RTOS：三个必答</a></li><li><a href="#sec-6">6. 不会的问题怎么接</a></li><li><a href="#sec-7">7. 模拟面试（先自己答，再看要点）</a></li><li><a href="#sec-8">8. 面试最后：反问什么</a></li><li><a href="#sec-9">9. 本课小结</a></li><li><a href="#sec-10">10. 下一课预告</a></li></ol></nav>
+  <h2 id="sec-0">这一课要解决的问题</h2>
+
+<section class="callout goal"><h3 class="callout-title">本课目标</h3><p>读完你能：用 2 分钟把项目讲清楚（背景→方案→难点→结果）；答对 C 语言、单片机原理、通信协议、RTOS 四类高频题；遇到不会的问题知道怎么体面地接住；知道面试最后该反问什么。</p>
+</section>
+<p>前面 18 课是&quot;把知识学会&quot;，这一课是&quot;把知识<strong>取出来</strong>&quot;。很多人会做不会说，面试时一紧张就只剩&quot;我用了 I2C 和 ADC&quot;。</p>
+<p>面试不是考试，是<strong>让对方相信你能干活</strong>。所以答题的结构比细节更重要。</p>
+<hr>
+<h2 id="sec-1">1. 两分钟项目讲述：背下这个骨架</h2>
+<h3>1.1 四段式</h3>
+<table>
+<thead>
+<tr>
+<th>段落</th>
+<th>时长</th>
+<th>说什么</th>
+<th>忌</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>背景/目标</strong></td>
+<td>20s</td>
+<td>这是什么、给谁用、要解决什么问题</td>
+<td>别从&quot;我学 STM32 开始&quot;讲</td>
+</tr>
+<tr>
+<td><strong>方案</strong></td>
+<td>40s</td>
+<td>硬件选型 + 软件架构（画个框图最好）</td>
+<td>别逐个外设报菜名</td>
+</tr>
+<tr>
+<td><strong>难点</strong></td>
+<td>40s</td>
+<td>1~2 个真实问题 + 怎么定位 + 怎么取舍</td>
+<td>别说&quot;没遇到困难&quot;</td>
+</tr>
+<tr>
+<td><strong>结果</strong></td>
+<td>20s</td>
+<td>指标：响应时间、稳定性、精度</td>
+<td>别只说&quot;能跑&quot;</td>
+</tr>
+</tbody></table>
+<h3>1.2 示例（可直接改成你自己的）</h3>
+<blockquote>
+<p>我做的是一个<strong>环境监测小站</strong>，用 STM32F103 采集温度，OLED 本地显示，串口上报给上位机，超阈值蜂鸣器报警。</p>
+<p>硬件上，温度用 NTC 分压进 ADC，屏幕走 I2C，上位机走 UART。软件分三层：Hardware 放屏幕和传感器的驱动，App 层用状态机管页面、用 SysTick 做 1ms 时基轮询任务。</p>
+<p>过程中遇到两个问题。第一个是屏幕和另一个 I2C 设备共用总线，单独测都正常，一起跑就偶发花屏。我判断是并发冲突，用逻辑分析仪看到一次传输中间插进了另一个起始信号，后来把所有 I2C 访问收口到一个任务、并用互斥量锁住整段传输就解决了。第二个是连续跑几小时后死机，用 FreeRTOS 的栈水位发现某个任务只剩 8 个字，把栈从 256 加到 512 后稳定跑过 24 小时。</p>
+<p>最后指标是按键响应小于 50ms，屏幕 10 帧每秒，温度精度 ±0.5℃，连续运行 24 小时无复位。</p>
+</blockquote>
+
+<section class="callout note"><h3 class="callout-title">为什么&quot;难点&quot;这一段最值钱</h3><p>面试官听过太多&quot;我用过 STM32、会 I2C/SPI/ADC&quot;。这些是<strong>教程内容</strong>，谁都能说。</p>
+<p>但&quot;单独正常、一起异常 → 怀疑并发 → 逻辑分析仪看到传输被打断 → 加锁&quot;是一条<strong>完整的排查链</strong>，它证明你：</p>
+<ol>
+<li>能观察现象并归纳规律；</li>
+<li>会用工具（逻辑分析仪、栈水位）；</li>
+<li>知道问题的<strong>本质</strong>（共享资源需要互斥），而不是背答案。</li>
+</ol>
+<p><strong>准备 2 个这样的故事，比背 50 道八股有用。</strong></p>
+</section>
+<hr>
+<h2 id="sec-2">2. C 语言：这 6 个必考</h2>
+<h3>2.1 volatile</h3>
+<p>示例作答是一个完整的模块文件，直接放进 <code>App/Src/</code> 就能编译：</p>
+<p><strong>文件：<code>App/Src/app_rx.c</code></strong></p>
+<pre><code class="language-c">/* 示例作答：中断置标志、主循环轮询（volatile 的典型场景） */
+#include &quot;main.h&quot;
+#include &quot;usart.h&quot;
+
+static volatile uint8_t g_rx_done = 0;   /* 每次都从内存真读，不许优化进寄存器 */
+static uint8_t g_frame[16];
+
+/* 串口接收完成回调：CubeMX 的 USART1_IRQHandler 会进来 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart-&gt;Instance == USART1) {
+        g_rx_done = 1;
+    }
+}
+
+/* 启动一次中断接收；在 App_Init() 里调用 */
+void App_RxStart(void)
+{
+    HAL_UART_Receive_IT(&amp;huart1, g_frame, (uint16_t)sizeof(g_frame));
+}
+
+/* 主循环每圈调用；不加 volatile，-O2 下可能被缓存成死循环 */
+void App_RxPoll(void)
+{
+    if (g_rx_done != 0U) {
+        g_rx_done = 0;
+        /* 这里解析 g_frame，示意 */
+    }
+}
+</code></pre>
+<p>在项目里，<code>App_RxStart()</code> 由 <code>App_Init()</code> 调用一次，<code>App_RxPoll()</code> 由 <code>App_Loop()</code> 每圈调用。</p>
+<p><strong>为什么加 volatile</strong>：编译器看不到&quot;中断会改这个变量&quot;，在 <code>-O2</code> 下它会把 <code>g_rx_done</code> 读进寄存器，然后认为循环条件永远不变，现象是&quot;串口明明收了数据，程序就是不处理&quot;。<strong>为什么不用别的</strong>：有人用 <code>__IO</code>（<code>volatile</code> 的宏别名）或内存屏障 <code>__DMB()</code>，前者只是写法不同，后者管的是访存顺序、不管&quot;每次重新读&quot;，不能替代。<strong>哪些没写</strong>：<code>USART1_IRQHandler</code> 和 NVIC 使能在 CubeMX 生成的 <code>stm32f1xx_it.c</code>/<code>usart.c</code> 里，<code>App_RxStart()</code> 由 <code>App_Init()</code> 调用。</p>
+<p><strong>作用</strong>：告诉编译器&quot;这个变量可能被程序之外的因素改变&quot;，<strong>每次都从内存重新读</strong>，不许优化到寄存器里。</p>
+<p><strong>三个必用场景</strong>：</p>
+<ol>
+<li>中断和主循环共享的变量；</li>
+<li>硬件寄存器（<code>*(volatile uint32_t *)0x40021000</code>）；</li>
+<li>DMA 写入的缓冲区。</li>
+</ol>
+<p><strong>它不是</strong>：原子操作、内存屏障、线程安全。<code>volatile</code> 不能替代互斥量。</p>
+
+<section class="callout warn"><h3 class="callout-title">面试陷阱：volatile 能保证原子性吗</h3><p><strong>不能。</strong> <code>x++</code> 是&quot;读—改—写&quot;三步，中间可能被中断打断；对 64 位变量或结构体更是必然出问题。<code>volatile</code> 只影响编译器优不优化，不影响 CPU 执行时会不会被打断。</p>
+<p>原子性要靠<strong>关中断 / 临界区 / 原子指令（LDREX/STREX）</strong>。这是高频追问。</p>
+</section>
+<h3>2.2 static</h3>
+<table>
+<thead>
+<tr>
+<th>用法</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>函数内的 <code>static</code> 变量</td>
+<td>生命周期变成整个程序，<strong>只初始化一次</strong>，函数退出不销毁</td>
+</tr>
+<tr>
+<td>文件作用域的 <code>static</code> 函数/变量</td>
+<td><strong>只在本文件可见</strong>，相当于 C 的&quot;私有&quot;</td>
+</tr>
+</tbody></table>
+<p>工程里大量用第二种做封装：<code>bsp_oled.c</code> 里的内部函数全加 <code>static</code>，头文件只暴露 3 个 API。</p>
+<h3>2.3 const</h3>
+<ul>
+<li><code>const char *p</code>：指向的内容不能改，指针能改。</li>
+<li><code>char * const p</code>：指针不能改，内容能改。</li>
+<li><code>const char * const p</code>：都不能改。</li>
+</ul>
+<p>口诀：<strong>const 在 <code>*</code> 左边修饰内容，在右边修饰指针</strong>。</p>
+<h3>2.4 大小端</h3>
+<ul>
+<li><strong>小端</strong>（STM32、x86）：低字节放低地址。<code>0x12345678</code> 在内存里是 <code>78 56 34 12</code>。</li>
+<li><strong>大端</strong>（部分网络协议、51）：高字节放低地址。</li>
+</ul>
+<p>判断方法（完整可编译的工具模块）：</p>
+<p><strong>文件：<code>App/Src/app_util.c</code></strong></p>
+<pre><code class="language-c">/* 示例作答：判断当前 CPU 的字节序，返回 1 = 小端 */
+#include &lt;stdint.h&gt;
+
+int App_IsLittleEndian(void)
+{
+    uint16_t x = 0x0001;          /* 存进去：低字节 0x01、高字节 0x00 */
+    return *(uint8_t *)&amp;x == 1;   /* 低地址若是 1 → 小端；是 0 → 大端 */
+}
+</code></pre>
+<p><strong>为什么用 <code>uint16_t</code> 不用 <code>int</code></strong>：类型宽度固定，不受平台影响；<code>int</code> 在 16 位单片机上也是 2 字节，但面试答固定宽度更稳。<strong>为什么不用 <code>union</code></strong>：<code>union { uint16_t v; uint8_t b[2]; }</code> 也能判，但取地址强转更短，且不依赖编译器对 union 的布局（标准保证，但读起来更绕）。<strong>哪些没写</strong>：不用 <code>&lt;endian.h&gt;</code>（那是 Linux 的东西），STM32 是 ARM Cortex-M，固定小端，这个函数主要是面试要你能说清&quot;低地址放低字节&quot;。</p>
+<p><strong>通信协议里必须约定字节序</strong>。你的串口帧如果发 <code>uint16_t</code> 直接 <code>memcpy</code>，对端是大端设备就会读反。s18 的采样帧就是手动拆成高字节在前，两端约定好即可。</p>
+<h3>2.5 内存分区</h3>
+<table>
+<thead>
+<tr>
+<th>区</th>
+<th>放什么</th>
+<th>生命周期</th>
+<th>大小</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>代码区 .text</strong></td>
+<td>机器码、常量</td>
+<td>整个运行期</td>
+<td>Flash</td>
+</tr>
+<tr>
+<td><strong>已初始化全局 .data</strong></td>
+<td><code>int g = 5;</code></td>
+<td>整个运行期</td>
+<td>RAM，启动时从 Flash 拷贝</td>
+</tr>
+<tr>
+<td><strong>未初始化全局 .bss</strong></td>
+<td><code>int g;</code></td>
+<td>整个运行期，启动清零</td>
+<td>RAM</td>
+</tr>
+<tr>
+<td><strong>堆 heap</strong></td>
+<td><code>malloc</code></td>
+<td>手动释放</td>
+<td>RAM，向上增长</td>
+</tr>
+<tr>
+<td><strong>栈 stack</strong></td>
+<td>局部变量、返回地址</td>
+<td>函数调用期</td>
+<td>RAM，向下增长</td>
+</tr>
+</tbody></table>
+
+<section class="callout note"><h3 class="callout-title">嵌入式为什么尽量不用 malloc</h3><ol>
+<li><strong>碎片</strong>：反复申请/释放不同大小，堆里会留下无法利用的碎片，跑几天就分配失败。</li>
+<li><strong>不确定性</strong>：分配时间不固定，硬实时系统不能接受。</li>
+<li><strong>失败处理</strong>：嵌入式没有&quot;内存不足弹窗&quot;，<code>malloc</code> 返回 NULL 必须处理，否则空指针崩溃。</li>
+</ol>
+<p>工程做法：<strong>静态分配</strong>（全局数组、内存池），或者用 FreeRTOS 的 <code>heap_4</code>（带碎片合并，仍不推荐频繁分配）。面试问&quot;为什么不用 malloc&quot;，答这三条就够。</p>
+</section>
+<h3>2.6 位操作（必写）</h3>
+<p><strong>文件：<code>App/Src/app_bit.c</code></strong></p>
+<pre><code class="language-c">/* 示例作答：位操作的四个基本动作，纯函数，方便在 PC 上单测 */
+#include &lt;stdint.h&gt;
+
+#define BIT(n)        (1U &lt;&lt; (n))   /* 1U 保证不触发有符号移位，n 取 0~31 */
+
+uint32_t App_BitSet(uint32_t reg, uint8_t n)
+{
+    return reg | BIT(n);            /* 置位：第 n 位变 1 */
+}
+
+uint32_t App_BitClear(uint32_t reg, uint8_t n)
+{
+    return reg &amp; ~BIT(n);           /* 清零：第 n 位变 0 */
+}
+
+uint32_t App_BitToggle(uint32_t reg, uint8_t n)
+{
+    return reg ^ BIT(n);            /* 翻转 */
+}
+
+uint32_t App_BitField(uint32_t reg, uint32_t val)
+{
+    /* 把 4~5 位改成 val 的低 2 位：先清零再或，才是&quot;替换&quot; */
+    return (reg &amp; ~(0x3U &lt;&lt; 4)) | ((val &amp; 0x3U) &lt;&lt; 4);
+}
+</code></pre>
+<p>真实寄存器写法是 <code>*(volatile uint32_t *)0x4001100C = App_BitSet(...)</code>。</p>
+<p><strong>为什么用 <code>1U</code> 而不是 <code>1</code></strong>：<code>1 &lt;&lt; 31</code> 在 32 位 <code>int</code> 上是未定义行为（符号位），加 <code>U</code> 变成无符号移位。<strong>为什么&quot;改连续位&quot;要先清零再或</strong>：直接 <code>| (val &lt;&lt; 4)</code> 只能把位变 1，清不掉原来的 1；先 <code>&amp; ~(mask)</code> 再或才是&quot;替换&quot;。<strong>哪些没写</strong>：真实使用必须通过 <code>volatile</code> 指针写寄存器，否则编译器会把多次读写合并；寄存器头文件里 ST 已经写好 <code>BSRR</code>、<code>BRR</code> 这类原子置位/清零寄存器，能一次写完成，比读-改-写更安全。</p>
+<p>面试常考&quot;用位操作实现两个数交换&quot;&quot;统计二进制里 1 的个数&quot;&quot;判断是不是 2 的幂&quot;。</p>
+<hr>
+<h2 id="sec-3">3. 单片机原理：三个必考流程</h2>
+<h3>3.1 上电到 main 发生了什么</h3>
+<ol>
+<li>复位，CPU 从 <strong>0x08000000</strong> 读<strong>初始 MSP</strong>（栈顶地址），从 <strong>0x08000004</strong> 读<strong>复位向量</strong>（Reset_Handler 地址）。</li>
+<li><code>Reset_Handler</code> 调用 <code>SystemInit()</code>：配时钟（HSE→PLL→72MHz）。</li>
+<li>把 <code>.data</code> 段从 Flash 拷贝到 RAM，把 <code>.bss</code> 段清零。</li>
+<li>调用 <code>__libc_init_array()</code>（C++ 全局构造、<code>__attribute__((constructor))</code>）。</li>
+<li>进入 <code>main()</code>。</li>
+</ol>
+
+<section class="callout note"><h3 class="callout-title">为什么先设 MSP 再跳</h3><p>因为 C 函数一调用就要用栈。如果 MSP 还是复位默认值（可能是 0 或随机），第一条 <code>push</code> 就会写飞。</p>
+<p>所以 Cortex-M 的向量表第一项<strong>固定是栈顶地址</strong>，硬件在取复位向量前自动把它装进 MSP。这是硬件帮你做的第一件事。</p>
+</section>
+<h3>3.2 中断响应流程</h3>
+<ol>
+<li>外设置中断标志，NVIC 判断优先级。</li>
+<li><strong>硬件自动压栈 8 个寄存器</strong>：R0-R3、R12、LR、PC、xPSR（保存现场）。</li>
+<li>取中断向量，跳进 ISR。</li>
+<li>执行 ISR，<strong>清中断标志</strong>（很多 bug 就是忘了清，导致反复进中断）。</li>
+<li>硬件自动出栈，回到被打断的地方。</li>
+</ol>
+<p>进阶考点：</p>
+<ul>
+<li><strong>尾链（Tail-chaining）</strong>：一个中断刚处理完，另一个挂起的中断直接进入，不做出栈再压栈，省 12 个周期。</li>
+<li><strong>迟到（Late arrival）</strong>：压栈期间来了更高优先级中断，直接改跳更高优先级，不重复压栈。</li>
+</ul>
+<h3>3.3 HardFault 怎么查</h3>
+<p><strong>文件：<code>Core/Src/stm32f1xx_it.c</code></strong></p>
+<pre><code class="language-c">/* 示例作答：覆盖启动文件里的弱定义 HardFault_Handler，并打印出错现场 */
+#include &quot;main.h&quot;
+#include &quot;stm32f1xx_it.h&quot;
+
+void NMI_Handler(void)
+{
+    while (1) { }
+}
+
+void SysTick_Handler(void)
+{
+    HAL_IncTick();
+}
+
+/* 汇编只做一件事：判断出错时用的是 MSP 还是 PSP，把栈指针当参数传给 C */
+void HardFault_Handler(void)
+{
+    __asm volatile (
+        &quot;tst lr, #4        \n&quot;   /* EXC_RETURN 第 2 位：0 用 MSP，1 用 PSP */
+        &quot;ite eq            \n&quot;
+        &quot;mrseq r0, msp     \n&quot;   /* 主栈：把栈指针当第一个参数传下去 */
+        &quot;mrsne r0, psp     \n&quot;   /* 线程栈（RTOS 任务里出错走这里） */
+        &quot;b hardfault_report\n&quot;   /* 尾调用，不压栈、不返回 */
+    );
+}
+
+/* 硬件压栈顺序：R0,R1,R2,R3,R12,LR,PC,xPSR → sp[5]=LR, sp[6]=PC */
+void hardfault_report(uint32_t *sp)
+{
+    volatile uint32_t pc = sp[6];   /* 出错时的 PC */
+    volatile uint32_t lr = sp[5];
+    (void)pc;
+    (void)lr;
+    while (1) { }   /* 在这里打断点，看 pc 落在哪个函数 */
+}
+</code></pre>
+<p><strong>为什么先用汇编写</strong>：C 函数一进门就可能压栈，而此刻栈指针本身可能已经坏了；更关键的是硬件不告诉你出错时用的是 MSP 还是 PSP，只能读 <code>LR</code> 的 <code>EXC_RETURN</code> 判断。<strong>为什么不用 <code>__get_MSP()</code> 直接读</strong>：那只能拿到主栈，RTOS 任务里出错（PSP）就取错了现场，PC 自然是错的。<strong>哪些没写</strong>：8 个寄存器的压栈是 Cortex-M 硬件自动做的，不用你保存；<code>stm32f1xx_it.c</code> 原本就有 <code>HardFault_Handler</code> 的空实现，直接用上面整个文件替换即可，别在别处重复定义。</p>
+<p><strong>排查思路</strong>：拿到 PC，在 <code>.map</code> 文件或反汇编里查这个地址属于哪个函数，基本就锁定了。</p>
+<p>常见原因：空指针、数组越界、栈溢出、函数指针没初始化、中断里调了禁止的 API。</p>
+<hr>
+<h2 id="sec-4">4. 通信与外设：一张对比表打天下</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>UART</th>
+<th>I2C</th>
+<th>SPI</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>线数</td>
+<td>2（TX/RX）</td>
+<td>2（SCL/SDA）</td>
+<td>3+N（+CS）</td>
+</tr>
+<tr>
+<td>同步方式</td>
+<td>异步（靠波特率）</td>
+<td>同步</td>
+<td>同步</td>
+</tr>
+<tr>
+<td>双工</td>
+<td>全双工</td>
+<td>半双工</td>
+<td>全双工</td>
+</tr>
+<tr>
+<td>速度</td>
+<td>~几 Mbps</td>
+<td>100k~1M</td>
+<td>几 M~几十 M</td>
+</tr>
+<tr>
+<td>多设备</td>
+<td>点对点</td>
+<td>地址寻址</td>
+<td>片选</td>
+</tr>
+<tr>
+<td>电平</td>
+<td>推挽</td>
+<td><strong>开漏 + 上拉</strong></td>
+<td>推挽</td>
+</tr>
+<tr>
+<td>应答</td>
+<td>无（可加校验）</td>
+<td>每字节 ACK</td>
+<td>无</td>
+</tr>
+</tbody></table>
+<p>必答的追问：</p>
+<ul>
+<li><strong>I2C 为什么开漏</strong>：多设备线与，避免推挽冲突短路；上拉提供高电平。</li>
+<li><strong>SPI 四种模式</strong>：CPOL 定空闲电平，CPHA 定第几个沿采样；数据在采样沿对侧变化。</li>
+<li><strong>UART 波特率误差</strong>：一帧 10 位，累计误差不能超过半个位宽，容忍约 2%~3%。</li>
+<li><strong>DMA 有什么用</strong>：外设和内存之间独立搬运，不占 CPU；配置注意地址递增和循环模式。</li>
+<li><strong>PWM 频率与分辨率</strong>：<code>f = 72M/((PSC+1)(ARR+1))</code>，两者乘积受时钟限制，不可兼得。</li>
+</ul>
+<hr>
+<h2 id="sec-5">5. RTOS：三个必答</h2>
+<ol>
+<li><strong>任务切换做了什么</strong>：保存当前任务的寄存器到它的栈（PendSV 异常里完成），从下一个任务的栈恢复寄存器，更新 PSP。</li>
+<li><strong>优先级反转是什么</strong>：低优先级任务持有锁，高优先级任务等锁，中优先级任务抢占低优先级 → 高优先级被中优先级间接卡住。解法是<strong>优先级继承</strong>（互斥量）。</li>
+<li><strong>栈溢出怎么发现</strong>：FreeRTOS 在栈尾填魔数 <code>0xA5</code>，切换时检查；或 <code>uxTaskGetStackHighWaterMark</code> 看历史最小剩余。现象是随机 HardFault、变量被莫名改写。</li>
+</ol>
+<hr>
+<h2 id="sec-6">6. 不会的问题怎么接</h2>
+<p>面试一定有不会的。<strong>硬编比不会更致命</strong>。</p>
+<p>三种接法：</p>
+<ol>
+<li><strong>承认 + 迁移</strong>：&quot;这个我没用过。但如果它和 XX 类似，我猜是……我的依据是……&quot;</li>
+<li><strong>降维</strong>：&quot;具体型号的寄存器我不记得，但这类外设的通用流程是：使能时钟 → 配引脚 → 配参数 → 开中断 → 启动。&quot;</li>
+<li><strong>反问确认</strong>：&quot;您问的是硬件层面的实现，还是使用层面的配置？&quot;——把问题变清晰，也给自己争取思考时间。</li>
+</ol>
+
+<section class="callout warn"><h3 class="callout-title">三个减分动作</h3><ul>
+<li><strong>不懂装懂</strong>：编一个听起来合理的答案，被追问两层就露馅。</li>
+<li><strong>沉默超过 10 秒</strong>：可以先说&quot;我想一下&quot;，然后说出思考过程。</li>
+<li><strong>把话题扯到不相关的地方</strong>：答不上来就承认，别绕。</li>
+</ul>
+</section>
+<hr>
+<h2 id="sec-7">7. 模拟面试（先自己答，再看要点）</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1</h3><p><code>volatile</code> 的作用是什么？<code>volatile</code> 能保证多线程安全吗？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><strong>作用</strong>：禁止编译器把变量缓存到寄存器，每次访问都从内存读/写。用于中断共享变量、硬件寄存器、DMA 缓冲区。</p>
+<p><strong>不能保证线程安全</strong>。它只保证&quot;可见性&quot;（每次都真读内存），不保证&quot;原子性&quot;。<code>x++</code> 是读-改-写三步，仍可能被打断。多任务共享数据要用临界区、互斥量或原子指令。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2</h3><p>I2C 为什么必须用开漏输出？如果改成推挽会怎样？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>I2C 是多设备共享总线。开漏输出只能&quot;拉低&quot;或&quot;放手&quot;，高电平由上拉电阻提供，所以多个设备同时驱动时是<strong>线与</strong>——最坏结果都是低电平，安全。</p>
+<p>改成推挽后，设备会主动输出高（接 3.3V）。当 A 输出高、B 输出低时，<strong>3.3V 和 GND 通过两个导通的 MOS 管直接短路</strong>，电流可达安培级，烧毁芯片。</p>
+<p>所以开漏 + 外部上拉是 I2C 的<strong>电气前提</strong>，不是可选项。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 3</h3><p>一个 12 位 ADC、参考 3.3V，读到 1024，电压是多少？这个精度能测 1mV 的变化吗？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>1024</mn><mi mathvariant="normal">/</mi><mn>4096</mn><mo>×</mo><mn>3.3</mn><mo>=</mo><mn>0.825</mn><mi>V</mi></mrow><annotation encoding="application/x-tex">1024 / 4096 \times 3.3 = 0.825V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1024/4096</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3.3</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">0.825</span><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span></span></p>
+<p>1 LSB = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3.3</mn><mi mathvariant="normal">/</mi><mn>4096</mn><mo>≈</mo><mn>0.806</mn><mi>m</mi><mi>V</mi></mrow><annotation encoding="application/x-tex">3.3/4096 \approx 0.806mV</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3.3/4096</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">0.806</span><span class="mord mathnormal" style="margin-right:0.22222em;">mV</span></span></span></span>。</p>
+<p><strong>能分辨 1mV，但不准</strong>。因为 1 LSB 是 0.806mV，1mV 的变化大约对应 1.24 个码值，会出现&quot;跳 1 或跳 2&quot;的量化噪声。再叠加 ADC 本身的 ±1~2 LSB 误差和参考电压误差，<strong>单次读数无法可靠分辨 1mV</strong>。</p>
+<p>要测 1mV 需要：过采样 + 平均（分辨率换精度）、更高位 ADC、或校准参考电压。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 4</h3><p>FreeRTOS 里，一个高优先级任务一直 <code>while(1)</code> 不让出 CPU，会发生什么？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><strong>低优先级任务永远得不到执行（饿死）</strong>，包括空闲任务。</p>
+<p>后果：</p>
+<ol>
+<li>空闲任务没机会回收已删除任务的内存（<code>vTaskDelete</code> 后资源泄漏）。</li>
+<li>低优先级的显示、通信、看门狗喂狗全部停摆 → 看门狗复位。</li>
+<li>同优先级的其他任务也拿不到时间片。</li>
+</ol>
+<p><strong>正确做法</strong>：每个任务必须有阻塞点（<code>vTaskDelay</code>、等队列、等信号量）。真要跑满 CPU 的计算任务，应把优先级设为最低，或定期 <code>taskYIELD()</code>。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 5</h3><p>你的串口收到一堆乱码，怎么排查？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>按&quot;从物理到软件&quot;的顺序：</p>
+<ol>
+<li><strong>波特率是否一致</strong>（最常见）。用示波器量一位宽度：115200 应为 8.68μs。偏一倍就是时钟/分频算错。</li>
+<li><strong>TX/RX 是否交叉</strong>：板子 TX 接模块 RX。</li>
+<li><strong>是否共地</strong>：不共地会时好时坏。</li>
+<li><strong>电平是否匹配</strong>：3.3V TTL 与 RS232/5V 不能直连。</li>
+<li><strong>时钟源</strong>：USART1 是 72MHz，USART2 是 36MHz，配错就差一倍。</li>
+<li><strong>数据位/校验/停止位</strong>是否和对方一致（8-N-1）。</li>
+</ol>
+<p>先量波形，比盯着乱码猜快得多。</p>
+</div></details></section>
+<hr>
+<h2 id="sec-8">8. 面试最后：反问什么</h2>
+<p><strong>不要说&quot;没有了&quot;。</strong> 反问是展示你思考深度的机会：</p>
+<ul>
+<li>&quot;这个岗位主要负责哪类产品？是偏底层驱动还是应用逻辑？&quot;</li>
+<li>&quot;团队现在用的 RTOS 和芯片平台是什么？&quot;</li>
+<li>&quot;新人入职后前三个月大概会参与什么？&quot;</li>
+<li>&quot;您觉得在这个团队做好这份工作，最重要的能力是什么？&quot;</li>
+</ul>
+
+<section class="callout note"><h3 class="callout-title">不要问的</h3><ul>
+<li>薪资、加班、假期（这些等 HR 环节）。</li>
+<li>官网上能查到的信息（显得没做功课）。</li>
+<li>&quot;我能通过吗&quot;（给对方压力）。</li>
+</ul>
+</section>
+<hr>
+<h2 id="sec-9">9. 本课小结</h2>
+<ul>
+<li>项目讲述用<strong>背景→方案→难点→结果</strong>四段式，<strong>难点</strong>那段最值钱。</li>
+<li>C 语言六件套：<code>volatile</code>（可见性非原子）、<code>static</code>、<code>const</code>、<strong>大小端</strong>、内存五区、位操作。</li>
+<li>三个流程：<strong>上电到 main</strong>（取 MSP/向量 → SystemInit → 拷 .data → 清 .bss → main）、<strong>中断响应</strong>（硬件压 8 个寄存器）、<strong>HardFault 查 PC</strong>。</li>
+<li>通信对比表要能脱口而出，尤其是 <strong>I2C 开漏</strong> 和 <strong>SPI 四模式</strong>。</li>
+<li>RTOS 三问：任务切换（PendSV 保存/恢复）、优先级反转（优先级继承）、栈溢出（水位/魔数）。</li>
+<li>不会就承认 + 迁移 + 降维，别硬编。</li>
+<li>面试最后一定要反问。</li>
+</ul>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能用四段式在 2 分钟内讲完项目</li>
+<li><input disabled="" type="checkbox"> 我能说出 <code>volatile</code> 的三个使用场景和它不能做什么</li>
+<li><input disabled="" type="checkbox"> 我能画出内存五区并说明 .data 和 .bss 的区别</li>
+<li><input disabled="" type="checkbox"> 我能完整说出上电到 main 的五个步骤</li>
+<li><input disabled="" type="checkbox"> 我能说出中断响应时硬件压了哪 8 个寄存器</li>
+<li><input disabled="" type="checkbox"> 我能对比 UART/I2C/SPI 并解释 I2C 为什么开漏</li>
+<li><input disabled="" type="checkbox"> 我能解释优先级反转和它的解法</li>
+<li><input disabled="" type="checkbox"> 我准备了 2 个&quot;问题→定位→解决&quot;的真实故事</li>
+<li><input disabled="" type="checkbox"> 我知道面试最后该反问什么</li>
+</ul>
+</section>
+<hr>
+<h2 id="sec-10">10. 下一课预告</h2>
+<p>课程的主线到这里就完整了：从点灯到综合项目，再到面试表达。</p>
+<p>最后一课是一个<strong>加分项</strong>，也是很多岗位的实际需求：<code>s20 进阶：Bootloader 与 IAP 固件升级</code>——怎么让设备在<strong>不拆机、不接 ST-Link</strong> 的情况下，通过串口自己升级固件。</p>
+
+  
+<nav class="pager">
+  <a class="prev" href="18-capstone-project.html">← 综合项目：环境监测小站</a>
+  <a class="next" href="20-bootloader-iap.html">进阶：Bootloader 与 IAP 固件升级 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

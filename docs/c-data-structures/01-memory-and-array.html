@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>数据结构到底是什么：内存、类型与数组 · C 语言数据结构</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">C 语言数据结构</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">concept</span>
+    <span class="badge ghost">50 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">先说结论</a></li><li><a href="#sec-1">一排格子：数组的真实形态</a></li><li><a href="#sec-2">地址算术：为什么 a[i] 是一次计算</a></li><li><a href="#sec-3">结构体：自己设计一种&amp;quot;格子&amp;quot;</a></li><li><a href="#sec-4">三种代价，一张表</a></li><li><a href="#sec-5">练习</a></li></ol></nav>
+  <h2 id="sec-0">先说结论</h2>
+<p>数据结构不是&quot;链表、树、图&quot;这些名词的总和，而是一句话：<strong>你决定数据在内存里怎么摆，以及你能对它做哪些操作</strong>。摆法决定代价——同样是&quot;存 100 个 int&quot;，摆成一排和摆成一串，查第 50 个的速度差 50 倍。</p>
+<p>C 语言特别适合学这件事，因为它不替你隐藏任何东西：没有容器、没有自动扩容、没有垃圾回收。你写 <code>int a[100]</code>，你就真的拿到 400 字节连续内存。所以这一课不从链表开始，从<strong>内存</strong>开始。</p>
+<h2 id="sec-1">一排格子：数组的真实形态</h2>
+<svg class="diagram" viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="数组是连续内存，链表是分散节点用指针相连">
+  <g font-family="-apple-system, 'Microsoft YaHei', sans-serif" font-size="13">
+    <text class="label" x="8" y="24">int a[5]，每个占 4 字节，地址连续</text>
+    <rect class="box acc" x="8" y="36" width="64" height="42" rx="6"/><text class="label" x="40" y="62" text-anchor="middle">a[0]</text>
+    <rect class="box acc" x="78" y="36" width="64" height="42" rx="6"/><text class="label" x="110" y="62" text-anchor="middle">a[1]</text>
+    <rect class="box acc" x="148" y="36" width="64" height="42" rx="6"/><text class="label" x="180" y="62" text-anchor="middle">a[2]</text>
+    <rect class="box acc" x="218" y="36" width="64" height="42" rx="6"/><text class="label" x="250" y="62" text-anchor="middle">a[3]</text>
+    <rect class="box acc" x="288" y="36" width="64" height="42" rx="6"/><text class="label" x="320" y="62" text-anchor="middle">a[4]</text>
+    <text class="sub" x="8" y="98" font-size="11">0x1000</text>
+    <text class="sub" x="288" y="98" font-size="11" text-anchor="end">a[4] 在 0x1010，数组止于 0x1014</text>
+    <text class="label" x="8" y="138">链表：5 个节点，地址互不相邻，靠 next 串起来</text>
+    <rect class="box" x="8" y="150" width="88" height="46" rx="6"/><text class="label" x="52" y="172" text-anchor="middle">data</text><text class="sub" x="52" y="188" text-anchor="middle" font-size="10">next →</text>
+    <rect class="box" x="176" y="150" width="88" height="46" rx="6"/><text class="label" x="220" y="172" text-anchor="middle">data</text><text class="sub" x="220" y="188" text-anchor="middle" font-size="10">next →</text>
+    <rect class="box" x="344" y="150" width="88" height="46" rx="6"/><text class="label" x="388" y="172" text-anchor="middle">data</text><text class="sub" x="388" y="188" text-anchor="middle" font-size="10">next →</text>
+    <rect class="box" x="512" y="150" width="88" height="46" rx="6"/><text class="label" x="556" y="172" text-anchor="middle">data</text><text class="sub" x="556" y="188" text-anchor="middle" font-size="10">next = NULL</text>
+    <g class="arrow"><path d="M96 173h80"/><path d="M264 173h80"/><path d="M432 173h80"/></g>
+    <g class="arrowhead"><path d="M176 173l-6-4v8z"/><path d="M344 173l-6-4v8z"/><path d="M512 173l-6-4v8z"/></g>
+    <text class="sub" x="8" y="222" font-size="11.5">访问 a[i]：算一次地址就能取到（O(1)）；访问链表第 i 个：必须从头一个个走（O(n)）</text>
+  </g>
+</svg>
+
+<p>上面两块图，是后面所有结构的母题：<strong>连续 vs 分散</strong>。连续 → 定位快、插入慢；分散 → 插入快、定位慢。后面的链表、树、哈希，无非是在这两者之间做不同的折中。</p>
+<h2 id="sec-2">地址算术：为什么 a[i] 是一次计算</h2>
+<p>C 标准只保证一件事：数组元素按顺序紧挨着放。于是取第 i 个元素不需要&quot;找&quot;，只需要算：</p>
+<pre><code class="language-c">int a[5] = {10, 20, 30, 40, 50};
+int *p = a;            /* a 退化为指向首元素的指针 */
+printf(&quot;%d\n&quot;, *(p + 2));   /* 30：指针加 2，实际地址 + 8 字节 */
+printf(&quot;%d\n&quot;, a[2]);       /* 完全等价，a[i] 就是 *(a + i) */
+</code></pre>
+<p><code>p + 2</code> 里的 <code>2</code> 不是 2 字节，是 <strong>2 个元素</strong>：编译器按 <code>sizeof(int)</code> 自动乘。这也是为什么数组下标必须从 0 开始——<code>a[i]</code> 的地址是 <code>首地址 + i × 元素大小</code>，从 0 起算才不用减一。</p>
+
+<section class="callout key"><h3 class="callout-title">一句话记住</h3><p><code>a[i]</code> ≡ <code>*(a + i)</code>。所以&quot;随机访问是 O(1)&quot;不是魔法，是一次乘法和一次加法。</p>
+</section>
+
+<section class="callout warn"><h3 class="callout-title">越界不是&quot;多读一点&quot;</h3><p>C 不检查下标。<code>a[10]</code> 会老老实实算出 <code>首地址 + 40</code> 字节，然后读写那块内存——那里可能是别的变量、可能是函数返回地址。读出来是垃圾值还只是小事，写进去就是未定义行为（UB），可能当场崩，也可能在三天后崩。</p>
+</section>
+<p><code>sizeof</code> 能帮你在编译期确认布局：</p>
+<pre><code class="language-c">int a[5];
+printf(&quot;%zu\n&quot;, sizeof(a));        /* 20：整个数组的字节数 */
+printf(&quot;%zu\n&quot;, sizeof(a) / sizeof(a[0]));  /* 5：元素个数，惯用写法 */
+</code></pre>
+<p>注意 <code>sizeof(a)</code> 只在<strong>数组还在</strong>的时候有效。把数组传给函数，它会退化成指针：</p>
+<pre><code class="language-c">void f(int arr[5]) {          /* 这里的 5 编译器直接忽略 */
+    printf(&quot;%zu\n&quot;, sizeof(arr));   /* 8：指针大小，不是 20 */
+}
+</code></pre>
+<p>这是 C 新手最常踩的坑之一：<strong>函数里拿不到数组长度</strong>，必须另外传一个 <code>n</code>。你以后写的每个数据结构接口，几乎都要带长度参数，原因就在这里。</p>
+<h2 id="sec-3">结构体：自己设计一种&quot;格子&quot;</h2>
+<p>数组只能装同类型的东西。要装&quot;一个学生 = 学号 + 成绩 + 姓名&quot;，就得用结构体自己排版：</p>
+<pre><code class="language-c">struct Student {
+    int   id;        /* 0-3   */
+    float score;     /* 4-7   */
+    char  name[12];  /* 8-19  */
+};                   /* 总共 20 字节 */
+</code></pre>
+<p>但内存不是你想要多少就给多少，编译器会做<strong>对齐（padding）</strong>：</p>
+<pre><code class="language-c">struct Bad {
+    char  c;    /* 1 字节，后面补 3 字节空洞 */
+    int   i;    /* 必须落在 4 的倍数上 */
+    char  d;    /* 1 字节，尾部再补 3 字节 */
+};              /* sizeof = 12，不是 6 */
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">为什么会有空洞</h3><p>CPU 读 4 字节整数时要求地址是 4 的倍数，否则要么变慢、要么直接报错。补齐是为了让每个成员都落在自己的对齐边界上。所以结构体成员<strong>从大到小排</strong>通常更省内存：<code>{int, char, char}</code> 只需 8 字节，换成 <code>{char, int, char}</code> 就要 12 字节——把 4 字节成员排在一起，空洞最少。</p>
+</section>
+<h2 id="sec-4">三种代价，一张表</h2>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>数组（连续）</th>
+<th>链表（分散）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>按下标访问第 i 个</td>
+<td>O(1)</td>
+<td>O(n)</td>
+</tr>
+<tr>
+<td>在头部插入</td>
+<td>O(n)（要整体后移）</td>
+<td>O(1)</td>
+</tr>
+<tr>
+<td>在中间插入</td>
+<td>O(n)</td>
+<td>O(1)（已持有前驱指针时）</td>
+</tr>
+<tr>
+<td>内存占用</td>
+<td>紧凑，无额外开销</td>
+<td>每个节点多一个指针</td>
+</tr>
+<tr>
+<td>扩容</td>
+<td>可能整体搬迁（realloc）</td>
+<td>天然逐个申请</td>
+</tr>
+</tbody></table>
+
+<section class="callout key"><h3 class="callout-title">选择的唯一标准</h3><p>看你的操作里<strong>哪个最多</strong>。查得多、改得少 → 数组；插删频繁、顺序访问为主 → 链表。没有&quot;更好的数据结构&quot;，只有&quot;更贴合你访问模式的结构&quot;。</p>
+</section>
+<p>这一课不需要你立刻写出链表。先建立两个直觉：<strong>数据结构是内存布局的选择</strong>；<strong>复杂度是这种布局的必然结果</strong>。下一课我们会用 <code>malloc</code> 把&quot;固定大小的数组&quot;变成&quot;能长大的数组&quot;，你会亲手遇到扩容那一刻的搬迁成本。</p>
+<h2 id="sec-5">练习</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：算地址</h3><p><code>double a[8]</code> 的首地址是 <code>0x2000</code>，<code>sizeof(double)</code> 为 8。<code>a[5]</code> 的地址是多少？<code>&amp;a[5] - &amp;a[2]</code> 等于多少？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><ul>
+<li><code>a[5]</code> 地址 = <code>0x2000 + 5 × 8</code> = <code>0x2028</code>。</li>
+<li><code>&amp;a[5] - &amp;a[2]</code> = 3。指针相减得到的是<strong>元素个数</strong>，不是字节数；编译器已经替你除了 <code>sizeof(double)</code>。</li>
+</ul>
+<p>判断标准：地址计算要乘元素大小，指针相减不用乘。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：结构体大小</h3><pre><code class="language-c">struct A { char c; int i; char d; };
+struct B { int i; char c; char d; };
+</code></pre>
+<p>两者 <code>sizeof</code> 分别是多少？为什么？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><ul>
+<li><code>struct A</code>：<code>c</code> 后补 3 字节，<code>i</code> 占 4，<code>d</code> 后补 3 字节 → <strong>12</strong>。</li>
+<li><code>struct B</code>：<code>i</code> 占 4，<code>c</code>、<code>d</code> 各 1 字节，尾部补 2 字节使整体是 4 的倍数 → <strong>8</strong>。</li>
+</ul>
+<p>同样三个成员，顺序不同差 4 字节。规则：成员按大小从大到小排，空洞最少。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 3：这个函数哪里错了</h3><pre><code class="language-c">void print_all(int arr[]) {
+    for (int i = 0; i &lt; sizeof(arr) / sizeof(arr[0]); i++)
+        printf(&quot;%d &quot;, arr[i]);
+}
+</code></pre>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><code>arr</code> 在参数位置已经退化成 <code>int *</code>，<code>sizeof(arr)</code> 是 8（64 位下指针大小），<code>sizeof(arr[0])</code> 是 4，循环条件变成 <code>i &lt; 2</code>——只打印两个元素，而且看起来&quot;没报错&quot;，最难查。</p>
+<p>修法：把长度作为参数传进来 <code>void print_all(int arr[], int n)</code>，循环写 <code>i &lt; n</code>。</p>
+</div></details></section>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能解释 <code>a[i]</code> 为什么是 O(1)</li>
+<li><input disabled="" type="checkbox"> 我知道数组作为参数会退化成指针，长度必须另传</li>
+<li><input disabled="" type="checkbox"> 我能算出带 padding 的结构体大小，并说出调整顺序的收益</li>
+<li><input disabled="" type="checkbox"> 我能用&quot;查得多还是改得多&quot;来选数组或链表</li>
+</ul>
+</section>
+
+  
+<nav class="pager">
+  <span></span>
+  <a class="next" href="02-pointer-and-alloc.html">指针、动态内存与手动扩容 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>数制与码制 · 数字电子技术</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a><span>/</span><a href="index.html">数字电子技术</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<article class="lesson">
+  <div class="lesson-meta">
+    <span class="badge">concept</span>
+    <span class="badge ghost">60 分钟</span>
+    
+  </div>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">先说结论：位置计数法只有两个参数</a></li><li><a href="#sec-1">进制互转：分组写字，十进制才动笔算</a></li><li><a href="#sec-2">8421BCD：一段四位，一位十进制</a></li><li><a href="#sec-3">5211 与余 3：取反为什么等于 9 减</a></li><li><a href="#sec-4">格雷码：相邻只变一位</a></li><li><a href="#sec-5">最常混的两件事：BCD 与十六进制、负数与补码</a></li><li><a href="#sec-6">练习</a></li></ol></nav>
+  <h2 id="sec-0">先说结论：位置计数法只有两个参数</h2>
+<p>任何进制只有两个参数：<strong>基</strong>（逢几进一）和<strong>权</strong>（每一位代表多少个 1），展开式是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>=</mo><mo>∑</mo><msub><mi>d</mi><mi>i</mi></msub><msup><mi>R</mi><mi>i</mi></msup></mrow><annotation encoding="application/x-tex">N=\sum d_iR^i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0747em;vertical-align:-0.25em;"></span><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.00773em;">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8247em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span></span></span></span></span></span></span></span>。二进制 <code>1011</code> = 8+0+2+1 = 11；同一串符号换个基就是另一个数，所以看到 0/1 串要先问&quot;按哪种约定读&quot;。权也向小数点右边延伸：2⁻¹=0.5、2⁻²=0.25、2⁻³=0.125，小数转换靠的就是它们。n 位二进制只装得下 0 到 2ⁿ−1，多出的第 n+1 位被丢掉，这就是后面计数器的&quot;模&quot;，选位宽时先看它够不够。</p>
+<h2 id="sec-1">进制互转：分组写字，十进制才动笔算</h2>
+<p>8=2³、16=2⁴，所以二与八是三位一组、二与十六是四位一组，从小数点向两侧切，左端不足补 0：<code>1011 0110</code> 得 <code>B6</code>，<code>101 101 110</code> 得 <code>556</code>，不用算。真正要算的只有十进制：整数<strong>除 2 取余、逆序读</strong>，小数<strong>乘 2 取整、顺序读</strong>。173 的余数倒着读是 <code>1010 1101</code>；0.6875 依次取 1、0、1、1，得 <code>0.1011</code>。</p>
+<svg class="diagram" viewBox="0 0 760 350" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="二进制居中，四向连接八进制、十六进制与十进制整数、小数，标注分组和除二取余乘二取整">
+  <g font-family="-apple-system, 'Microsoft YaHei', sans-serif" font-size="13">
+    <text class="label" x="8" y="22">进制转换的路线：二进制是枢纽，八和十六是分组写法，十进制才要动除法和乘法</text>
+    <rect class="box" x="295" y="28" width="170" height="54" rx="6"/><text class="label" x="380" y="52" text-anchor="middle">十进制</text><text class="sub" x="380" y="70" text-anchor="middle" font-size="11">整数 + 小数</text>
+    <rect class="box acc" x="295" y="148" width="170" height="58" rx="6"/><text class="label" x="380" y="173" text-anchor="middle">二进制</text><text class="sub" x="380" y="192" text-anchor="middle" font-size="11">基 2，权 2ⁱ</text>
+    <rect class="box" x="35" y="148" width="135" height="58" rx="6"/><text class="label" x="102" y="173" text-anchor="middle">八进制</text><text class="sub" x="102" y="192" text-anchor="middle" font-size="11">3 位一组</text>
+    <rect class="box" x="590" y="148" width="135" height="58" rx="6"/><text class="label" x="657" y="173" text-anchor="middle">十六进制</text><text class="sub" x="657" y="192" text-anchor="middle" font-size="11">4 位一组</text>
+    <rect class="box" x="295" y="262" width="170" height="54" rx="6"/><text class="label" x="380" y="286" text-anchor="middle">十进制小数</text><text class="sub" x="380" y="304" text-anchor="middle" font-size="11">0.6875 → 0.1011</text>
+    <g class="arrow"><path d="M380 82v60"/><path d="M295 177h-119"/><path d="M465 177h119"/><path d="M380 262v-56"/></g>
+    <g class="arrowhead"><path d="M380 148l-4-6h8z"/><path d="M170 177l6-4v8z"/><path d="M590 177l-6-4v8z"/><path d="M380 206l-4 6h8z"/></g>
+    <text class="sub" x="390" y="112" font-size="11">除 2 取余（整数，逆序读）</text>
+    <text class="sub" x="390" y="128" font-size="11">乘 2 取整（小数，顺序读）</text>
+    <text class="sub" x="138" y="136" font-size="11">二 ↔ 八：3 位一组</text>
+    <text class="sub" x="618" y="136" font-size="11">二 ↔ 十六：4 位一组</text>
+    <text class="sub" x="390" y="246" font-size="11">乘 2 取整，顺序读</text>
+    <text class="sub" x="8" y="340" font-size="11.5">二进制转十进制：按权展开求和；十进制转二进制：整数除 2 取余、小数乘 2 取整</text>
+  </g>
+</svg>
+
+<section class="callout warn"><h3 class="callout-title">小数不一定转得完</h3><p>0.1 转二进制是无限循环，有限位宽只能取近似。先定精度再舍入，别指望转干净。</p>
+</section>
+<p>背熟 2 的幂到 1024（记住 1024≈10³，估位宽很快），十进制转二进制用贪心减法最快：200−128=72，72−64=8，8−8=0，所以 200 是 <code>1100 1000</code>。反向按权相加；更稳的是四位一组写成十六进制再展开。8、10、16 位的上界分别是 255、1023、65535，判断溢出直接对照。</p>
+<table>
+<thead>
+<tr>
+<th>位号</th>
+<th>7</th>
+<th>6</th>
+<th>5</th>
+<th>4</th>
+<th>3</th>
+<th>2</th>
+<th>1</th>
+<th>0</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>权</td>
+<td>128</td>
+<td>64</td>
+<td>32</td>
+<td>16</td>
+<td>8</td>
+<td>4</td>
+<td>2</td>
+<td>1</td>
+</tr>
+</tbody></table>
+<h2 id="sec-2">8421BCD：一段四位，一位十进制</h2>
+<p>8421BCD 不是二进制数，而是<strong>用二进制形状写十进制</strong>：每个十进制数字单独占 4 位，位权仍是 8-4-2-1。97 写成 <code>1001 0111</code>，两组独立、互不进位。合法码只有 <code>0000</code> 到 <code>1001</code>，<code>1010</code> 到 <code>1111</code> 是非法码。它服务于数码管、拨码开关这类十进制接口，译码器直接按 BCD 驱动七段笔画；代价是浪费 6 个码字，而且相加超过 9 时要加 <code>0110</code> 修正，不能像二进制那样逢 16 进 1。</p>
+
+<section class="callout warn"><h3 class="callout-title">读 BCD 要一组一组读</h3><p><code>1001 0111</code> 按 BCD 是 97，按二进制是 151。先看是否 4 位一组、每组是否不大于 1001，再看上下文是送显示还是做运算。</p>
+</section>
+<h2 id="sec-3">5211 与余 3：取反为什么等于 9 减</h2>
+<p>5211 的四位权重是 <strong>5、2、1、1</strong>，和正好是 9。</p>
+<table>
+<thead>
+<tr>
+<th>十进制</th>
+<th>5211 码</th>
+<th>按权值核对</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>0000</td>
+<td>0</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0001</td>
+<td>1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>0011</td>
+<td>2</td>
+</tr>
+<tr>
+<td>3</td>
+<td>0101</td>
+<td>3</td>
+</tr>
+<tr>
+<td>4</td>
+<td>0111</td>
+<td>4</td>
+</tr>
+<tr>
+<td>5</td>
+<td>1000</td>
+<td>5</td>
+</tr>
+<tr>
+<td>6</td>
+<td>1010</td>
+<td>6</td>
+</tr>
+<tr>
+<td>7</td>
+<td>1100</td>
+<td>7</td>
+</tr>
+<tr>
+<td>8</td>
+<td>1110</td>
+<td>8</td>
+</tr>
+<tr>
+<td>9</td>
+<td>1111</td>
+<td>9</td>
+</tr>
+</tbody></table>
+<p>自补只需一行推理：某码字的值是 v，按位取反等于把它所有置 1 位的权重扣掉，而权重总和是 9，所以新值就是 9−v。例：5=<code>1000</code>，取反 <code>0111</code> 正是 4 的码，9−5=4 对上了。注意 7 也可写 <code>1011</code>，要自补就取 <code>1100</code>，让编码互补成对。余 3 码等于 8421BCD 加 <code>0011</code>；d 的码是 d+3，取反为 15−(d+3)=12−d，而 9−d 的余 3 码也是 12−d，所以同样自补。它还有个好处：全 0 非法，断线读到 <code>0000</code> 就能发现。</p>
+
+<section class="callout note"><h3 class="callout-title">自补的用处</h3><p>做减法时取反即得 9 的补数，省掉一整套减法电路。</p>
+</section>
+<h2 id="sec-4">格雷码：相邻只变一位</h2>
+<p>二进制 3 到 4 是 <code>0011</code> 变 <code>0100</code>，三位同翻；路径延迟不同，中间可能冒出假码字。格雷码相邻只变一位，从根上避免毛刺。</p>
+<table>
+<thead>
+<tr>
+<th>十进制</th>
+<th>二进制</th>
+<th>格雷码</th>
+<th>十进制</th>
+<th>二进制</th>
+<th>格雷码</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>0000</td>
+<td>0000</td>
+<td>8</td>
+<td>1000</td>
+<td>1100</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0001</td>
+<td>0001</td>
+<td>9</td>
+<td>1001</td>
+<td>1101</td>
+</tr>
+<tr>
+<td>2</td>
+<td>0010</td>
+<td>0011</td>
+<td>10</td>
+<td>1010</td>
+<td>1111</td>
+</tr>
+<tr>
+<td>3</td>
+<td>0011</td>
+<td>0010</td>
+<td>11</td>
+<td>1011</td>
+<td>1110</td>
+</tr>
+<tr>
+<td>4</td>
+<td>0100</td>
+<td>0110</td>
+<td>12</td>
+<td>1100</td>
+<td>1010</td>
+</tr>
+<tr>
+<td>5</td>
+<td>0101</td>
+<td>0111</td>
+<td>13</td>
+<td>1101</td>
+<td>1011</td>
+</tr>
+<tr>
+<td>6</td>
+<td>0110</td>
+<td>0101</td>
+<td>14</td>
+<td>1110</td>
+<td>1001</td>
+</tr>
+<tr>
+<td>7</td>
+<td>0111</td>
+<td>0100</td>
+<td>15</td>
+<td>1111</td>
+<td>1000</td>
+</tr>
+</tbody></table>
+<p>转换公式 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>G</mi><mo>=</mo><mi>B</mi><mo>⊕</mo><mo stretchy="false">(</mo><mi>B</mi><mo>≫</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">G=B\oplus(B\gg1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">G</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≫</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span>：最高位照抄，其余每位与左邻异或。<code>0101</code> 右移得 <code>0010</code>，异或得 <code>0111</code>；反向从最高位起 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>b</mi><mi>i</mi></msub><mo>=</mo><msub><mi>g</mi><mi>i</mi></msub><mo>⊕</mo><msub><mi>b</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">b_i=g_i\oplus b_{i+1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9028em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span>。它不是加权码，用在旋转编码器、跨时钟域指针和卡诺图排序，卡诺图行列借用它才让首尾两格也能合并。</p>
+<h2 id="sec-5">最常混的两件事：BCD 与十六进制、负数与补码</h2>
+<p><code>1001 0111</code> 按 BCD 是 97，按十六进制是 <code>0x97</code>，即 151。十六进制一位管 0 到 15、逢 16 进 1；BCD 一段管 0 到 9、逢 10 进 1。每组不大于 <code>1001</code> 才可能是 BCD，出现 <code>1010</code> 到 <code>1111</code> 就排除。负数没有&quot;-&quot;号：n 位补码把 −x 写成 2ⁿ−x，操作是取反加一，8 位 −5 是 <code>1111 1011</code>；减法变成加法 A−B=A+(−B) mod 2ⁿ，硬件因此只需一套加法器；8 位范围 −128 到 +127，<code>1000 0000</code> 单独表示 −128。位宽一变，补码跟着变。</p>
+
+<section class="callout warn"><h3 class="callout-title">位宽一变，补码就变</h3><p>−5 在 8 位是 <code>1111 1011</code>，在 4 位是 <code>1011</code>。取反加一前先扩展到目标位宽。</p>
+</section>
+<h2 id="sec-6">练习</h2>
+
+<section class="callout exercise"><h3 class="callout-title">练习 1：把 0.6875 转成二进制</h3><p>只用乘 2 取整法，写出每一步的乘积与取出的整数位。</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>0.6875×2=1.375 取 <strong>1</strong>；0.375×2=0.75 取 <strong>0</strong>；0.75×2=1.5 取 <strong>1</strong>；0.5×2=1.0 取 <strong>1</strong>。顺序读得 <code>0.1011</code>。核对：0.5+0.125+0.0625=0.6875。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 2：5 的 5211 码与余 3 码</h3><p>写出 5 的两种码，并用 9−5=4 验证 5211 的自补性。</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>5211：5 只占最高位权重，得 <code>1000</code>。余 3：<code>0101</code>+<code>0011</code>=<code>1000</code>。把 <code>1000</code> 取反得 <code>0111</code>，权值 2+1+1=4，正是 9−5，也就是 4 的 5211 码。权重和 5+2+1+1=9，所以取反必得 9 减原值。</p>
+</div></details></section>
+
+<section class="callout exercise"><h3 class="callout-title">练习 3：BCD 还是十六进制</h3><p>寄存器里是 <code>1001 0111</code>。送数码管显示时表示多少？按十六进制读又是多少？</p>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p>BCD 读法：<code>1001</code>=9，<code>0111</code>=7，合起来 <strong>97</strong>，两组都 ≤1001，合法。十六进制读法：<code>0x97</code>=9×16+7=<strong>151</strong>。若高四位出现 <code>1010</code> 到 <code>1111</code>，就只能是二进制或十六进制，绝不可能是 BCD。</p>
+</div></details></section>
+
+<section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
+<li><input disabled="" type="checkbox"> 我能写出 R 进制展开式，说清基和权各管什么</li>
+<li><input disabled="" type="checkbox"> 我能用除 2 取余与乘 2 取整双向转换</li>
+<li><input disabled="" type="checkbox"> 我能写出 5211 与余 3 码表，并用权重和 9 解释自补</li>
+<li><input disabled="" type="checkbox"> 我能用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>G</mi><mo>=</mo><mi>B</mi><mo>⊕</mo><mo stretchy="false">(</mo><mi>B</mi><mo>≫</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">G=B\oplus(B\gg1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">G</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊕</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≫</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span> 算格雷码，并说出它抗毛刺的原因</li>
+<li><input disabled="" type="checkbox"> 我能区分 BCD 与十六进制，并说出补码如何把减法变加法</li>
+</ul>
+</section>
+
+  
+<nav class="pager">
+  <span></span>
+  <a class="next" href="02-boolean-algebra.html">逻辑代数基础 →</a>
+</nav>
+</article>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>STM32 嵌入式开发 · 学习搭档</title>
+<link rel="stylesheet" href="../assets/katex/katex.min.css" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html">学习搭档</a>
+    <nav class="crumbs"><a href="../index.html">全部科目</a></nav>
+  </div>
+</header>
+<main class="page">
+
+<section class="hero">
+  <h1>STM32 嵌入式开发</h1>
+  <p class="subtitle">从蓝板点灯到能面试：F103 + HAL 库全流程</p>
+  <p class="goal">能独立完成 STM32F103C8T6 的常见外设开发（GPIO、时钟、中断、定时器、串口、I2C、SPI、ADC），做出一个可演示的综合项目，并在面试中说清每个外设的原理与配置取舍</p>
+</section>
+<section class="node-list"><a class="node" href="01-what-is-stm32.html">
+  <div class="node-main">
+    <div class="node-title">认识这块蓝板：STM32F103C8T6 与最小系统</div>
+    <div class="node-summary">能拆读型号每一位的含义，说清最小系统的四要素与存储地图，知道 SWD 下载走的哪两根线</div>
+  </div>
+  <div class="node-side">
+    <span class="badge done">已完成</span>
+    <span class="node-time">60 分钟</span>
+  </div></a>
+<a class="node" href="02-first-project.html">
+  <div class="node-main">
+    <div class="node-title">第一个工程：CubeIDE + ST-Link 点灯与在线调试</div>
+    <div class="node-summary">能独立完成新建工程、配置引脚、编译烧写，并用 SWD 打断点看变量，知道程序跑不起来时按什么顺序排查</div>
+  </div>
+  <div class="node-side">
+    <span class="badge done">已完成</span>
+    <span class="node-time">90 分钟</span>
+  </div></a>
+<a class="node" href="03-gpio-output.html">
+  <div class="node-main">
+    <div class="node-title">GPIO 输出：推挽、开漏与 LED 驱动</div>
+    <div class="node-summary">能解释推挽与开漏的区别，用 PC13 与排针 GPIO 做出跑马灯，知道为什么 LED 常接成低电平点亮</div>
+  </div>
+  <div class="node-side">
+    <span class="badge doing">进行中</span>
+    <span class="node-time">80 分钟</span>
+  </div></a>
+<a class="node" href="04-gpio-input.html">
+  <div class="node-main">
+    <div class="node-title">GPIO 输入：上下拉、浮空与按键消抖</div>
+    <div class="node-summary">能根据外部电路选择上拉或下拉输入，实现带消抖的按键翻转 LED，说明浮空输入为什么会乱跳</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">70 分钟</span>
+  </div></a>
+<a class="node" href="05-clock-system.html">
+  <div class="node-main">
+    <div class="node-title">时钟系统：8MHz 怎么变成 72MHz</div>
+    <div class="node-summary">能画出 HSE→PLL→SYSCLK 的路径，算出 AHB/APB1/APB2 各总线频率，并解释 APB1 为什么被限制在 36MHz</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">80 分钟</span>
+  </div></a>
+<a class="node" href="06-systick.html">
+  <div class="node-main">
+    <div class="node-title">SysTick 与延时：做一个不阻塞的定时框架</div>
+    <div class="node-summary">能用 SysTick 产生 1ms 时基，写出非阻塞的周期任务调度，说清 HAL_Delay 为什么不能在中断里调用</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">60 分钟</span>
+  </div></a>
+<a class="node" href="07-interrupt-nvic.html">
+  <div class="node-main">
+    <div class="node-title">中断与 NVIC：CPU 被打断时发生了什么</div>
+    <div class="node-summary">能说清中断响应流程、优先级分组与抢占/响应优先级，列出中断服务函数里不能做的三件事</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">80 分钟</span>
+  </div></a>
+<a class="node" href="08-exti.html">
+  <div class="node-main">
+    <div class="node-title">外部中断 EXTI：按键用中断方式处理</div>
+    <div class="node-summary">能把 PA0 配成下降沿触发中断，在回调函数里消抖并翻转 LED，解释按键抖动为什么会触发多次中断</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">70 分钟</span>
+  </div></a>
+<a class="node" href="09-timer-basics.html">
+  <div class="node-main">
+    <div class="node-title">定时器基础：PSC、ARR 与定时中断</div>
+    <div class="node-summary">能由 PSC 与 ARR 算出任意定时周期，说清向上/向下/中央对齐计数，用 TIM3 做 1 秒定时中断</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">80 分钟</span>
+  </div></a>
+<a class="node" href="10-pwm.html">
+  <div class="node-main">
+    <div class="node-title">PWM 输出：占空比、频率与呼吸灯</div>
+    <div class="node-summary">能由 ARR 与 CCR 算出频率和占空比，做出可调亮度的呼吸灯，并说明 PWM 驱动舵机与电机时的注意点</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">70 分钟</span>
+  </div></a>
+<a class="node" href="11-input-capture.html">
+  <div class="node-main">
+    <div class="node-title">输入捕获与编码器模式</div>
+    <div class="node-summary">能用输入捕获测出信号频率与高电平脉宽，用编码器模式读旋钮方向，说明测频法与测周法的适用场景</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">80 分钟</span>
+  </div></a>
+<a class="node" href="12-uart.html">
+  <div class="node-main">
+    <div class="node-title">串口 UART：帧格式、波特率与 printf 重定向</div>
+    <div class="node-summary">能算清波特率误差，实现中断收发与环形缓冲区，把 printf 重定向到串口，理解为什么接收要用 DMA 或中断</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">90 分钟</span>
+  </div></a>
+<a class="node" href="13-i2c.html">
+  <div class="node-main">
+    <div class="node-title">I2C 总线：开漏、时序与 OLED 显示</div>
+    <div class="node-summary">能解释 I2C 为什么要开漏加电阻，读懂起始/应答时序，驱动 OLED 显示文字与数字</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">90 分钟</span>
+  </div></a>
+<a class="node" href="14-spi.html">
+  <div class="node-main">
+    <div class="node-title">SPI 总线：四种模式与外设选型</div>
+    <div class="node-summary">能根据 CPOL/CPHA 选出正确模式，用 SPI 读写 Flash 或驱动屏幕，说清 I2C 与 SPI 的取舍</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">70 分钟</span>
+  </div></a>
+<a class="node" href="15-adc-dma.html">
+  <div class="node-main">
+    <div class="node-title">ADC 采样与 DMA 搬运</div>
+    <div class="node-summary">能配出 12 位 ADC 采样并换算成电压，用 DMA 做多通道连续采样，说明采样时间与信号源阻抗的关系</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">80 分钟</span>
+  </div></a>
+<a class="node" href="16-watchdog-lowpower-flash.html">
+  <div class="node-main">
+    <div class="node-title">看门狗、低功耗与 Flash 参数存储</div>
+    <div class="node-summary">能配置独立看门狗防死机，把配置参数存进 Flash 掉电不丢，说明待机/停机/睡眠三种低功耗模式的区别</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">60 分钟</span>
+  </div></a>
+<a class="node" href="17-freertos.html">
+  <div class="node-main">
+    <div class="node-title">FreeRTOS 入门：任务、队列与信号量</div>
+    <div class="node-summary">能创建多个任务并用队列传数据，说清任务栈大小怎么定、优先级怎么排，以及裸机轮询与 RTOS 的取舍</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">90 分钟</span>
+  </div></a>
+<a class="node" href="18-capstone-project.html">
+  <div class="node-main">
+    <div class="node-title">综合项目：环境监测小站</div>
+    <div class="node-summary">用 OLED + 传感器 + 按键 + 串口上报搭出一个可演示的小系统，能分模块调试并写出一份项目说明</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">180 分钟</span>
+  </div></a>
+<a class="node" href="19-interview.html">
+  <div class="node-main">
+    <div class="node-title">面试专题：高频问题与项目讲述</div>
+    <div class="node-summary">能用 2 分钟讲清自己的项目，答对中断、时钟、通信协议、内存这几类高频面试题</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">90 分钟</span>
+  </div></a>
+<a class="node" href="20-bootloader-iap.html">
+  <div class="node-main">
+    <div class="node-title">进阶：Bootloader 与 IAP 固件升级</div>
+    <div class="node-summary">能划分 Bootloader 与 App 的 Flash 区域，完成关中断、设向量表、设栈顶、跳转四步，用串口分包写入新固件并校验，知道跳转失败与变砖的排查方法</div>
+  </div>
+  <div class="node-side">
+    <span class="badge todo">未开始</span>
+    <span class="node-time">90 分钟</span>
+  </div></a></section>
+</main>
+<footer class="footer">
+  <span>只读静态版 · 进度与笔记请用本地阅读端</span>
+  <a href="https://github.com/Kong134/StudyMate-Trae-CN" target="_blank" rel="noopener">GitHub 仓库</a>
+</footer>
+</body>
+</html>
