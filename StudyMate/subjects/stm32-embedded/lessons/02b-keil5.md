@@ -2,13 +2,13 @@
 node: s2b
 title: Keil uVision5（MDK5）操作全流程
 type: practice
-duration: 90
+duration: 120
 ---
 
 ## 这一课要解决的问题
 
 ::: goal
-读完并动手做完，你能：看懂 Keil 界面的五个区域；从零建出一个 STM32F103C8T6 的标准库工程；把 `Options for Target` 里五个关键页配对，并知道每一项配错会看到什么现象；编译、下载、打断点、看变量；遇到 5 类最常见的报错能自己定位。
+读完并动手做完，你能：看懂 Keil 界面的五个区域；从零建出一个 STM32F103C8T6 的标准库工程；把 `Options for Target` 里五个关键页配对，并知道每一项配错会看到什么现象；编译、下载、打断点、看变量；遇到 5 类最常见的报错能自己定位；会用补全、书签、条件断点、软件仿真、SWO 打印、多 Target 这些日常提效功能。
 :::
 
 ::: note 和已有课件的关系
@@ -471,7 +471,235 @@ Application running ...
 
 ---
 
-## 9. 练习
+## 9. 工作里真正高频的功能
+
+前 8 节保证你"能把程序跑起来"，这一节保证你"跑得快"。按你干活时遇到的场景往下查，不用从头看。
+
+### 9.1 写代码：补全、语法检查、模板、书签
+
+Keil 的补全**默认是关着的**，所以很多人以为它没有补全。打开方式：`Edit → Configuration → Text Completion` 页。
+
+| 选项 | 建议 | 作用 | 不配的后果 |
+| --- | --- | --- | --- |
+| Symbols after N Characters | 勾选，N=3 | 输入 3 个字符后自动弹出工程里的符号 | 全程手打，`GPIO_InitStructure` 这种长名字打到崩溃 |
+| Function Parameters | 勾选 | 输入函数名和左括号时显示参数表 | 忘了参数顺序，只能回去翻头文件 |
+| Struct/Class Members | 勾选 | 输入 `.` 或 `->` 后弹出成员列表 | 结构体字段靠背 |
+| Dynamic Syntax Checking | 先不开，工程大了会卡 | 边写边做语法检查，错误处标红波浪线 | 开着写大文件，打字有明显延迟 |
+
+手动唤起提示按 `Ctrl+Space`。
+
+::: note 补全不弹的三个常见原因
+1. 没勾 `Symbols after N Characters`；
+2. 光标在字符串或注释里（补全不工作）；
+3. 工程还没成功编译过一次，符号表是空的——先按 F7 编一遍。
+:::
+
+**代码模板**：Project 窗口的 `Templates` 标签页里有现成模板（比如中断服务函数骨架），右键可以新建自己的 `.uvt` 文件。把常用的 `main` 骨架、GPIO 初始化骨架存成模板，比每次复制粘贴快。
+
+**书签**：读别人代码或自己写长文件时用，比滚轮靠谱。
+
+| 操作 | 快捷键 |
+| --- | --- |
+| 加/删书签 | `Ctrl+F2` |
+| 跳到下一个书签 | `F2` |
+| 跳到上一个书签 | `Shift+F2` |
+| 清空所有书签 | `Ctrl+Shift+F2` |
+
+**批量注释**：`Edit → Advanced → Comment Selection / Uncomment Selection`。调一段代码时先注释掉，比删了再加回来安全。
+
+**折叠**：`Edit → Outlining → Collapse All / Expand All`，看整体结构时一屏装下整个文件。
+
+### 9.2 找东西：F12、全工程搜索、跳行
+
+| 想干什么 | 操作 | 前提/坑 |
+| --- | --- | --- |
+| 看函数/变量的定义 | `F12`（Go to Definition） | 必须勾 Output 页的 Browse Information，否则毫无反应 |
+| 全工程搜字符串 | `Ctrl+Shift+F`（Find in Files） | 可以限定目录、勾正则；比 `Ctrl+F` 只搜当前文件强得多 |
+| 跳到第 N 行 | `Ctrl+G` | 看编译报错的行号时最快 |
+| 看当前文件有哪些函数 | Project 窗口 `Functions` 标签 | 文件超过 500 行时必备 |
+| 看某个符号被谁引用 | `View → Source Browser` | 同样依赖 Browse Information |
+
+::: warn 改了头文件后 F12 跳错位置
+Browse Information 是编译时生成的索引。只改 `.h` 不重编，索引还是旧的，F12 会跳到旧行号。改完头文件按 F7 重编一次即可。
+:::
+
+### 9.3 断点不止"停一下"
+
+`Ctrl+B` 打开 Breakpoints 窗口，能看到所有断点并逐个编辑。断点有三种高级玩法：
+
+| 类型 | 怎么设 | 用在什么场景 |
+| --- | --- | --- |
+| 条件断点 | Expression 填条件，如 `i == 500` | 循环第 500 次才出错，不想按 499 次 F5 |
+| 计数断点 | Count 填 N，命中第 N 次才停 | PWM 第 10 个周期波形不对 |
+| 数据访问断点 | Expression 填变量名或地址，设 Read/Write | "这个变量被谁偷偷改了"——排查内存越界的神器 |
+
+注意两点：
+
+- **条件要用 `==` 不能用 `=`**。写成 `i = 500` 是赋值，条件永远成立，断点第一圈就停，看起来像"条件没生效"。
+- **断点数量受硬件限制**。Cortex-M3 的 FPB 只有 6 个指令比较器，ST-Link 一般也就支持 6 个；超了会报 `Too many breakpoints`。解决办法是把零散断点合并成条件断点。
+
+::: note 数据访问断点为什么经常"设了没反应"
+它依赖调试器的硬件 watchpoint，部分克隆 ST-Link 或旧固件不支持；而且只能监视有限个地址。设了不停，先用"暂停后手动看变量"的方式替代。
+:::
+
+### 9.4 没有板子也能跑：软件仿真（Simulator）
+
+忘带板子、或者想验证一段纯算法逻辑时，用仿真模式：
+
+1. 魔术棒 `Debug` 页，`Use` 从 `ST-Link Debugger` 改成 **`Simulator`**；
+2. `Ctrl+F5` 进调试，之后操作和真机完全一样；
+3. 能看变量、寄存器（`Peripherals → System Viewer`）、内存（`View → Memory Windows`）。
+
+**逻辑分析仪**（只能在仿真模式下用）：
+
+1. `View → Analysis Windows → Logic Analyzer`；
+2. 点 `Setup`，新建一条信号，输入要观察的引脚；
+3. 常见写法：`GPIOC.13`、`GPIOC_IDR.13`，或直接写变量名。报 `Unknown Signal` 就换一种写法试；
+4. 全速运行，波形会画出来，量一下高电平宽度就能验证 PWM 占空比。
+
+::: warn 仿真有三个必须知道的局限
+1. **时序不真实**：仿真器按指令条数估算时间，不反映真实主频、中断延迟、总线等待。拿它测"延时准不准"会得到错误结论。
+2. **外设模型不全**：串口、I2C 从机、外部传感器在仿真里没有模型，读回来全是 0。
+3. **必须记得改回来**：调试完把 `Use` 改回 `ST-Link Debugger`，否则 F8 下载会提示找不到 Flash 算法——因为仿真器不写 Flash。
+:::
+
+### 9.5 不占串口的打印：SWO / ITM printf
+
+Cortex-M3 里有个 **ITM**（Instrumentation Trace Macrocell），它能借调试器的 SWO 脚往电脑发字符，**不占用 USART**。
+
+配置四步：
+
+1. 魔术棒 `Debug → Settings → Trace` 页，勾 `Trace Enable`；
+2. `Core Clock` 填 **72MHz**（填错了时间戳不对，但不影响字符输出）；
+3. 勾上 `ITM Stimulus Port 0`；
+4. 代码里重定向：
+
+**文件：`User\retarget.c`**
+
+```c
+#include "stm32f10x.h"
+#include <stdio.h>
+
+/* 把 printf 的底层输出改到 ITM，不占用串口 */
+int fputc(int ch, FILE *f)
+{
+    ITM_SendChar((uint32_t)ch);   /* core_cm3.h 里的内联函数 */
+    return ch;
+}
+```
+
+然后在 `View → Serial Windows → Debug (printf) Viewer` 里看输出。
+
+::: warn 蓝板用户先别急着用这个
+SWO 信号走的是 **PB3** 引脚，而蓝板那 4 针 SWD 排针只有 3V3 / SWDIO / SWCLK / GND，**没有引出 PB3**。要用就得飞线，而且不少克隆 ST-Link 的 SWO 通道不稳定。
+
+现阶段更省事的路是 **USART1 + 串口助手**（s12 会讲完整实现）。SWO 留给以后用官方 Nucleo 板或带 SWO 排针的调试器时再用。
+
+另外，没勾 `Use MicroLIB` 时 printf 会走半主机模式，程序一调用就停在等调试器——第 4 节说的那个坑，在这里再确认一次。
+:::
+
+### 9.6 一份代码管多个配置：多 Target 与多工程
+
+**多 Target**（同一工程、不同编译配置）：`Project → Manage → Project Items → Targets` 标签，点 `New` 复制一个 Target。每个 Target 有自己独立的魔术棒设置。
+
+典型用法：
+
+- `Debug` Target：`-O0`、勾调试信息，用来单步；
+- `Release` Target：`-O2`、不生成调试信息，用来出正式固件；
+- 一块板一个 Target：只改 Define 里的芯片宏，源码共用。
+
+**多工程 Workspace**：`Project → Manage → Multi-Project Workspace`，把多个 `.uvprojx` 放进一个工作区，按顺序编译。典型的 Bootloader + App 双工程（s20 会用到），一次 Build 就能生成两个固件。
+
+::: warn 切了 Target 却没改魔术棒
+最常见的事故：切到 Release Target 发现编译报错，因为宏和优化等级还是另一套；或者切了 Target 以为在调试新配置，实际下载的是旧 Target 的产物。**切 Target 后先扫一眼魔术棒标题栏**——它会显示当前 Target 名。
+:::
+
+### 9.7 换芯片、加组件：Pack Installer 与 RTE
+
+- **Pack Installer**（工具栏图标，或 `Project → Manage → Pack Installer`）：装器件支持包（DFP）、CMSIS 包、中间件。装完新芯片才会出现在器件列表里。
+- **RTE**（`Project → Manage → Run-Time Environment`）：勾选式添加 CMSIS-Core、Device Startup、FreeRTOS 等组件，Keil 自动把源文件挂进工程。
+
+::: warn RTE 和手动加文件不要混用
+RTE 勾了 `Device Startup` 之后又手动拷一份 `startup_stm32f10x_md.s` 进工程，链接时会报 `multiply defined`（重复定义）。二选一，别两边都来。
+:::
+
+### 9.8 把 Keil 工程放进 Git（配合你的 GitHub 仓库）
+
+Keil 会往工程目录里扔几十个中间文件，全提交上去仓库很快就臃肿。规则很简单：**源码和工程描述文件提交，编译产物和本机布局忽略**。
+
+| 文件 | 提交? | 原因 |
+| --- | --- | --- |
+| `*.c` / `*.h` | 提交 | 源码本体 |
+| `*.uvprojx` | **必须提交** | 工程结构、芯片型号、魔术棒配置都在里面，别人靠它打开工程 |
+| `*.uvoptx` | 建议忽略 | 断点、调试器选择等个人设置，换人打开就变 |
+| `Objects/`、`Listings/` | 忽略 | 编译产物，可随时重建 |
+| `*.uvguix.*` | 忽略 | 窗口布局，带用户名，每人不同 |
+| `*.hex`、`*.axf` | 忽略（发版可另存） | 产物，不该进版本库 |
+
+在工程根目录放一个 `.gitignore`：
+
+```gitignore
+# Keil 编译产物
+Objects/
+Listings/
+*.hex
+*.axf
+*.map
+*.lst
+*.dep
+*.crf
+*.o
+*.d
+
+# µVision 本机布局与备份
+*.uvguix.*
+*.uvgui.*
+*.bak
+
+# 个人调试设置（团队要共享断点时可去掉这一行）
+*.uvoptx
+```
+
+::: note 换电脑打不开工程的两个原因
+1. **Include Paths 写成了绝对路径**（`D:\mcu\...`）。在魔术棒 C/C++ 里改成 `.\\Start;.\\Library;.\\User` 这种相对路径，工程才能跟着文件夹走。
+2. **只提交了 .uvprojx，没提交库文件**。别人 clone 下来缺 `stm32f10x_gpio.c`，一编译全是 `Undefined symbol`。库文件要么一起提交，要么在 README 里写清从哪下载哪个版本。
+:::
+
+### 9.9 把常用工具塞进菜单
+
+`Tools → Customize Tools Menu` 可以添加外部程序。常用组合：
+
+| 名称 | Command | 用途 |
+| --- | --- | --- |
+| Git Bash | `C:\Program Files\Git\bin\bash.exe` | 不离开 Keil 就能提交代码 |
+| 串口助手 | 你自己的串口工具 exe | 看 printf 输出 |
+| CubeProgrammer | `STM32CubeProgrammer.exe` | 芯片被锁时全片擦除 |
+
+Command 路径里有空格要加英文引号。
+
+### 9.10 快捷键总表（打印出来贴显示器边上）
+
+| 快捷键 | 功能 | 快捷键 | 功能 |
+| --- | --- | --- | --- |
+| `F7` | 编译 | `F8` | 下载 |
+| `Ctrl+F5` | 进入/退出调试 | `F5` | 全速运行 |
+| `F9` | 加/删断点 | `Ctrl+B` | 断点管理窗口 |
+| `F10` | 单步跳过 | `F11` | 单步进入 |
+| `Ctrl+F11` | 跳出函数 | `Ctrl+F10` | 运行到光标 |
+| `F12` | 跳到定义 | `Ctrl+G` | 跳到指定行 |
+| `Ctrl+F` | 当前文件查找 | `Ctrl+Shift+F` | 全工程查找 |
+| `Ctrl+H` | 替换 | `Ctrl+Space` | 唤起补全 |
+| `Ctrl+F2` | 加/删书签 | `F2` / `Shift+F2` | 下/上一个书签 |
+| `Alt+F7` | 工程选项（魔术棒） | `Ctrl+F7` | 只编译当前文件 |
+| `Ctrl+S` | 保存 | `Ctrl+Z` | 撤销 |
+
+::: key 这一节的取舍
+不是每个都要会。**先掌握 9.1 的补全、9.2 的 F12 和 9.3 的条件断点**——这三个每天都会用到；仿真、SWO、多 Target 是遇到具体场景再回来查的工具，不用背。
+:::
+
+---
+
+## 10. 练习
 
 ::: exercise 练习 1（配置题）
 某同学的工程编译报错：
@@ -529,6 +757,42 @@ Application running ...
 顺序：先拔插 USB（最省事）→ 再试 `Connect under reset`（覆盖最多情况）→ 最后查线。
 :::
 
+::: exercise 练习 5（条件断点）
+下面这段代码在第 500 次循环时，`sum` 突然变成一个离谱的大数：
+
+```c
+for (i = 0; i < 1000; i++)
+{
+    sum += buf[i];
+}
+```
+
+你不想按 499 次 F5。用条件断点怎么设？如果断点第一圈就停，最可能是什么原因？
+:::
+
+::: answer
+`Ctrl+B` 打开 Breakpoints 窗口，在 Expression 里填 **`i == 500`**（或 `sum > 某个合理上限`），关闭窗口后按 F5，程序会自动跑到第 500 圈停下。
+
+第一圈就停的原因，几乎都是把 `==` 写成了 `=`：`i = 500` 是赋值，把 i 改成 500 后条件恒为真，于是立刻命中。
+
+补充：如果想"第 500 圈停下来看，但之后还继续"，在断点窗口里配 `Count`；想抓"谁改了 sum"，用数据访问断点而不是条件断点。
+:::
+
+::: exercise 练习 6（Git）
+你把 Keil 工程提交到 GitHub，队友 clone 下来后打开 `.uvprojx`，一编译报 `cannot open source input file "stm32f10x.h"`。工程里文件都在。最可能是哪两件事之一？
+
+如果是你自己这边发现仓库里多了几百个 `Objects\*.o`，该改哪个文件？
+:::
+
+::: answer
+**两个可能**：
+
+1. 队友的 Include Paths 指向的是你电脑上的绝对路径（`D:\mcu\...`），他那边没有这个目录。改成 `.\Start;.\Library;.\User` 相对路径再提交。
+2. 库文件根本没提交（`.gitignore` 误伤了 `Library/`，或者当初是复制粘贴没加进仓库），队友本地缺 `.c/.h`。把库文件补进仓库，或在 README 写清依赖。
+
+**忽略编译产物**：工程根目录的 `.gitignore` 里加 `Objects/`、`Listings/`、`*.uvguix.*`。已经误提交的产物要先 `git rm -r --cached Objects` 从索引里移除，再提交一次 `.gitignore`——光加 `.gitignore` 不会让已跟踪的文件自动消失。
+:::
+
 ::: selfcheck 自检
 - [ ] 我能说出 Keil 界面五个区域各自的作用
 - [ ] 我能不看笔记说出魔术棒五个必配页和它们各管什么
@@ -536,4 +800,7 @@ Application running ...
 - [ ] 我能从 `Program Size` 四个数字算出 Flash 和 RAM 占用
 - [ ] 报 `No target connected` 时我知道按什么顺序排查
 - [ ] 我完成了一次"建工程 → 编译 → 下载 → 断点 → 看变量"的完整闭环
+- [ ] 我打开了代码补全，能用 `Ctrl+Space` 和 `Ctrl+F2` 书签
+- [ ] 我会用 `Ctrl+B` 设一个条件断点，并知道 `=` 和 `==` 的坑
+- [ ] 我知道哪些 Keil 文件该提交、哪些该写进 `.gitignore`
 :::

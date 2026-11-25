@@ -19,13 +19,13 @@
 <article class="lesson">
   <div class="lesson-meta">
     <span class="badge">practice</span>
-    <span class="badge ghost">90 分钟</span>
+    <span class="badge ghost">120 分钟</span>
     
   </div>
-  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 先认路：Keil 界面就五个区域</a></li><li><a href="#sec-2">2. Keil 到底替你做了什么</a></li><li><a href="#sec-3">3. 从零建一个 F103 工程</a></li><li><a href="#sec-4">4. 魔术棒：Options for Target 五个关键页</a></li><li><a href="#sec-5">5. 编译：读懂 Build Output</a></li><li><a href="#sec-6">6. 下载与在线调试</a></li><li><a href="#sec-7">7. 五类常见报错对照表</a></li><li><a href="#sec-8">8. 如果代码是 HAL / CubeMX 生成的</a></li><li><a href="#sec-9">9. 练习</a></li></ol></nav>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 先认路：Keil 界面就五个区域</a></li><li><a href="#sec-2">2. Keil 到底替你做了什么</a></li><li><a href="#sec-3">3. 从零建一个 F103 工程</a></li><li><a href="#sec-4">4. 魔术棒：Options for Target 五个关键页</a></li><li><a href="#sec-5">5. 编译：读懂 Build Output</a></li><li><a href="#sec-6">6. 下载与在线调试</a></li><li><a href="#sec-7">7. 五类常见报错对照表</a></li><li><a href="#sec-8">8. 如果代码是 HAL / CubeMX 生成的</a></li><li><a href="#sec-9">9. 工作里真正高频的功能</a></li><li><a href="#sec-10">10. 练习</a></li></ol></nav>
   <h2 id="sec-0">这一课要解决的问题</h2>
 
-<section class="callout goal"><h3 class="callout-title">本课目标</h3><p>读完并动手做完，你能：看懂 Keil 界面的五个区域；从零建出一个 STM32F103C8T6 的标准库工程；把 <code>Options for Target</code> 里五个关键页配对，并知道每一项配错会看到什么现象；编译、下载、打断点、看变量；遇到 5 类最常见的报错能自己定位。</p>
+<section class="callout goal"><h3 class="callout-title">本课目标</h3><p>读完并动手做完，你能：看懂 Keil 界面的五个区域；从零建出一个 STM32F103C8T6 的标准库工程；把 <code>Options for Target</code> 里五个关键页配对，并知道每一项配错会看到什么现象；编译、下载、打断点、看变量；遇到 5 类最常见的报错能自己定位；会用补全、书签、条件断点、软件仿真、SWO 打印、多 Target 这些日常提效功能。</p>
 </section>
 
 <section class="callout note"><h3 class="callout-title">和已有课件的关系</h3><p>第 2 课走的是 <strong>CubeIDE + HAL</strong>，本课讲 <strong>Keil MDK5 + 标准库</strong>。原因很实际：你对照的江协科技视频、大部分学校教材和面试现场用的都是 Keil，你得会开这台&quot;车&quot;。</p>
@@ -699,7 +699,396 @@ Application running ...
 </tbody></table>
 <p><strong>结论：Keil 更像&quot;手动挡&quot;</strong>——所有配置都要你自己说清楚，好处是你能看见每一步；CubeIDE 是&quot;自动挡&quot;，少配但黑盒多。会了 Keil，CubeIDE 只是换了按钮位置。</p>
 <hr>
-<h2 id="sec-9">9. 练习</h2>
+<h2 id="sec-9">9. 工作里真正高频的功能</h2>
+<p>前 8 节保证你&quot;能把程序跑起来&quot;，这一节保证你&quot;跑得快&quot;。按你干活时遇到的场景往下查，不用从头看。</p>
+<h3>9.1 写代码：补全、语法检查、模板、书签</h3>
+<p>Keil 的补全<strong>默认是关着的</strong>，所以很多人以为它没有补全。打开方式：<code>Edit → Configuration → Text Completion</code> 页。</p>
+<table>
+<thead>
+<tr>
+<th>选项</th>
+<th>建议</th>
+<th>作用</th>
+<th>不配的后果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Symbols after N Characters</td>
+<td>勾选，N=3</td>
+<td>输入 3 个字符后自动弹出工程里的符号</td>
+<td>全程手打，<code>GPIO_InitStructure</code> 这种长名字打到崩溃</td>
+</tr>
+<tr>
+<td>Function Parameters</td>
+<td>勾选</td>
+<td>输入函数名和左括号时显示参数表</td>
+<td>忘了参数顺序，只能回去翻头文件</td>
+</tr>
+<tr>
+<td>Struct/Class Members</td>
+<td>勾选</td>
+<td>输入 <code>.</code> 或 <code>-&gt;</code> 后弹出成员列表</td>
+<td>结构体字段靠背</td>
+</tr>
+<tr>
+<td>Dynamic Syntax Checking</td>
+<td>先不开，工程大了会卡</td>
+<td>边写边做语法检查，错误处标红波浪线</td>
+<td>开着写大文件，打字有明显延迟</td>
+</tr>
+</tbody></table>
+<p>手动唤起提示按 <code>Ctrl+Space</code>。</p>
+
+<section class="callout note"><h3 class="callout-title">补全不弹的三个常见原因</h3><ol>
+<li>没勾 <code>Symbols after N Characters</code>；</li>
+<li>光标在字符串或注释里（补全不工作）；</li>
+<li>工程还没成功编译过一次，符号表是空的——先按 F7 编一遍。</li>
+</ol>
+</section>
+<p><strong>代码模板</strong>：Project 窗口的 <code>Templates</code> 标签页里有现成模板（比如中断服务函数骨架），右键可以新建自己的 <code>.uvt</code> 文件。把常用的 <code>main</code> 骨架、GPIO 初始化骨架存成模板，比每次复制粘贴快。</p>
+<p><strong>书签</strong>：读别人代码或自己写长文件时用，比滚轮靠谱。</p>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>快捷键</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>加/删书签</td>
+<td><code>Ctrl+F2</code></td>
+</tr>
+<tr>
+<td>跳到下一个书签</td>
+<td><code>F2</code></td>
+</tr>
+<tr>
+<td>跳到上一个书签</td>
+<td><code>Shift+F2</code></td>
+</tr>
+<tr>
+<td>清空所有书签</td>
+<td><code>Ctrl+Shift+F2</code></td>
+</tr>
+</tbody></table>
+<p><strong>批量注释</strong>：<code>Edit → Advanced → Comment Selection / Uncomment Selection</code>。调一段代码时先注释掉，比删了再加回来安全。</p>
+<p><strong>折叠</strong>：<code>Edit → Outlining → Collapse All / Expand All</code>，看整体结构时一屏装下整个文件。</p>
+<h3>9.2 找东西：F12、全工程搜索、跳行</h3>
+<table>
+<thead>
+<tr>
+<th>想干什么</th>
+<th>操作</th>
+<th>前提/坑</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>看函数/变量的定义</td>
+<td><code>F12</code>（Go to Definition）</td>
+<td>必须勾 Output 页的 Browse Information，否则毫无反应</td>
+</tr>
+<tr>
+<td>全工程搜字符串</td>
+<td><code>Ctrl+Shift+F</code>（Find in Files）</td>
+<td>可以限定目录、勾正则；比 <code>Ctrl+F</code> 只搜当前文件强得多</td>
+</tr>
+<tr>
+<td>跳到第 N 行</td>
+<td><code>Ctrl+G</code></td>
+<td>看编译报错的行号时最快</td>
+</tr>
+<tr>
+<td>看当前文件有哪些函数</td>
+<td>Project 窗口 <code>Functions</code> 标签</td>
+<td>文件超过 500 行时必备</td>
+</tr>
+<tr>
+<td>看某个符号被谁引用</td>
+<td><code>View → Source Browser</code></td>
+<td>同样依赖 Browse Information</td>
+</tr>
+</tbody></table>
+
+<section class="callout warn"><h3 class="callout-title">改了头文件后 F12 跳错位置</h3><p>Browse Information 是编译时生成的索引。只改 <code>.h</code> 不重编，索引还是旧的，F12 会跳到旧行号。改完头文件按 F7 重编一次即可。</p>
+</section>
+<h3>9.3 断点不止&quot;停一下&quot;</h3>
+<p><code>Ctrl+B</code> 打开 Breakpoints 窗口，能看到所有断点并逐个编辑。断点有三种高级玩法：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>怎么设</th>
+<th>用在什么场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>条件断点</td>
+<td>Expression 填条件，如 <code>i == 500</code></td>
+<td>循环第 500 次才出错，不想按 499 次 F5</td>
+</tr>
+<tr>
+<td>计数断点</td>
+<td>Count 填 N，命中第 N 次才停</td>
+<td>PWM 第 10 个周期波形不对</td>
+</tr>
+<tr>
+<td>数据访问断点</td>
+<td>Expression 填变量名或地址，设 Read/Write</td>
+<td>&quot;这个变量被谁偷偷改了&quot;——排查内存越界的神器</td>
+</tr>
+</tbody></table>
+<p>注意两点：</p>
+<ul>
+<li><strong>条件要用 <code>==</code> 不能用 <code>=</code></strong>。写成 <code>i = 500</code> 是赋值，条件永远成立，断点第一圈就停，看起来像&quot;条件没生效&quot;。</li>
+<li><strong>断点数量受硬件限制</strong>。Cortex-M3 的 FPB 只有 6 个指令比较器，ST-Link 一般也就支持 6 个；超了会报 <code>Too many breakpoints</code>。解决办法是把零散断点合并成条件断点。</li>
+</ul>
+
+<section class="callout note"><h3 class="callout-title">数据访问断点为什么经常&quot;设了没反应&quot;</h3><p>它依赖调试器的硬件 watchpoint，部分克隆 ST-Link 或旧固件不支持；而且只能监视有限个地址。设了不停，先用&quot;暂停后手动看变量&quot;的方式替代。</p>
+</section>
+<h3>9.4 没有板子也能跑：软件仿真（Simulator）</h3>
+<p>忘带板子、或者想验证一段纯算法逻辑时，用仿真模式：</p>
+<ol>
+<li>魔术棒 <code>Debug</code> 页，<code>Use</code> 从 <code>ST-Link Debugger</code> 改成 <strong><code>Simulator</code></strong>；</li>
+<li><code>Ctrl+F5</code> 进调试，之后操作和真机完全一样；</li>
+<li>能看变量、寄存器（<code>Peripherals → System Viewer</code>）、内存（<code>View → Memory Windows</code>）。</li>
+</ol>
+<p><strong>逻辑分析仪</strong>（只能在仿真模式下用）：</p>
+<ol>
+<li><code>View → Analysis Windows → Logic Analyzer</code>；</li>
+<li>点 <code>Setup</code>，新建一条信号，输入要观察的引脚；</li>
+<li>常见写法：<code>GPIOC.13</code>、<code>GPIOC_IDR.13</code>，或直接写变量名。报 <code>Unknown Signal</code> 就换一种写法试；</li>
+<li>全速运行，波形会画出来，量一下高电平宽度就能验证 PWM 占空比。</li>
+</ol>
+
+<section class="callout warn"><h3 class="callout-title">仿真有三个必须知道的局限</h3><ol>
+<li><strong>时序不真实</strong>：仿真器按指令条数估算时间，不反映真实主频、中断延迟、总线等待。拿它测&quot;延时准不准&quot;会得到错误结论。</li>
+<li><strong>外设模型不全</strong>：串口、I2C 从机、外部传感器在仿真里没有模型，读回来全是 0。</li>
+<li><strong>必须记得改回来</strong>：调试完把 <code>Use</code> 改回 <code>ST-Link Debugger</code>，否则 F8 下载会提示找不到 Flash 算法——因为仿真器不写 Flash。</li>
+</ol>
+</section>
+<h3>9.5 不占串口的打印：SWO / ITM printf</h3>
+<p>Cortex-M3 里有个 <strong>ITM</strong>（Instrumentation Trace Macrocell），它能借调试器的 SWO 脚往电脑发字符，<strong>不占用 USART</strong>。</p>
+<p>配置四步：</p>
+<ol>
+<li>魔术棒 <code>Debug → Settings → Trace</code> 页，勾 <code>Trace Enable</code>；</li>
+<li><code>Core Clock</code> 填 <strong>72MHz</strong>（填错了时间戳不对，但不影响字符输出）；</li>
+<li>勾上 <code>ITM Stimulus Port 0</code>；</li>
+<li>代码里重定向：</li>
+</ol>
+<p><strong>文件：<code>User\retarget.c</code></strong></p>
+<pre><code class="language-c">#include &quot;stm32f10x.h&quot;
+#include &lt;stdio.h&gt;
+
+/* 把 printf 的底层输出改到 ITM，不占用串口 */
+int fputc(int ch, FILE *f)
+{
+    ITM_SendChar((uint32_t)ch);   /* core_cm3.h 里的内联函数 */
+    return ch;
+}
+</code></pre>
+<p>然后在 <code>View → Serial Windows → Debug (printf) Viewer</code> 里看输出。</p>
+
+<section class="callout warn"><h3 class="callout-title">蓝板用户先别急着用这个</h3><p>SWO 信号走的是 <strong>PB3</strong> 引脚，而蓝板那 4 针 SWD 排针只有 3V3 / SWDIO / SWCLK / GND，<strong>没有引出 PB3</strong>。要用就得飞线，而且不少克隆 ST-Link 的 SWO 通道不稳定。</p>
+<p>现阶段更省事的路是 <strong>USART1 + 串口助手</strong>（s12 会讲完整实现）。SWO 留给以后用官方 Nucleo 板或带 SWO 排针的调试器时再用。</p>
+<p>另外，没勾 <code>Use MicroLIB</code> 时 printf 会走半主机模式，程序一调用就停在等调试器——第 4 节说的那个坑，在这里再确认一次。</p>
+</section>
+<h3>9.6 一份代码管多个配置：多 Target 与多工程</h3>
+<p><strong>多 Target</strong>（同一工程、不同编译配置）：<code>Project → Manage → Project Items → Targets</code> 标签，点 <code>New</code> 复制一个 Target。每个 Target 有自己独立的魔术棒设置。</p>
+<p>典型用法：</p>
+<ul>
+<li><code>Debug</code> Target：<code>-O0</code>、勾调试信息，用来单步；</li>
+<li><code>Release</code> Target：<code>-O2</code>、不生成调试信息，用来出正式固件；</li>
+<li>一块板一个 Target：只改 Define 里的芯片宏，源码共用。</li>
+</ul>
+<p><strong>多工程 Workspace</strong>：<code>Project → Manage → Multi-Project Workspace</code>，把多个 <code>.uvprojx</code> 放进一个工作区，按顺序编译。典型的 Bootloader + App 双工程（s20 会用到），一次 Build 就能生成两个固件。</p>
+
+<section class="callout warn"><h3 class="callout-title">切了 Target 却没改魔术棒</h3><p>最常见的事故：切到 Release Target 发现编译报错，因为宏和优化等级还是另一套；或者切了 Target 以为在调试新配置，实际下载的是旧 Target 的产物。<strong>切 Target 后先扫一眼魔术棒标题栏</strong>——它会显示当前 Target 名。</p>
+</section>
+<h3>9.7 换芯片、加组件：Pack Installer 与 RTE</h3>
+<ul>
+<li><strong>Pack Installer</strong>（工具栏图标，或 <code>Project → Manage → Pack Installer</code>）：装器件支持包（DFP）、CMSIS 包、中间件。装完新芯片才会出现在器件列表里。</li>
+<li><strong>RTE</strong>（<code>Project → Manage → Run-Time Environment</code>）：勾选式添加 CMSIS-Core、Device Startup、FreeRTOS 等组件，Keil 自动把源文件挂进工程。</li>
+</ul>
+
+<section class="callout warn"><h3 class="callout-title">RTE 和手动加文件不要混用</h3><p>RTE 勾了 <code>Device Startup</code> 之后又手动拷一份 <code>startup_stm32f10x_md.s</code> 进工程，链接时会报 <code>multiply defined</code>（重复定义）。二选一，别两边都来。</p>
+</section>
+<h3>9.8 把 Keil 工程放进 Git（配合你的 GitHub 仓库）</h3>
+<p>Keil 会往工程目录里扔几十个中间文件，全提交上去仓库很快就臃肿。规则很简单：<strong>源码和工程描述文件提交，编译产物和本机布局忽略</strong>。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>提交?</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>*.c</code> / <code>*.h</code></td>
+<td>提交</td>
+<td>源码本体</td>
+</tr>
+<tr>
+<td><code>*.uvprojx</code></td>
+<td><strong>必须提交</strong></td>
+<td>工程结构、芯片型号、魔术棒配置都在里面，别人靠它打开工程</td>
+</tr>
+<tr>
+<td><code>*.uvoptx</code></td>
+<td>建议忽略</td>
+<td>断点、调试器选择等个人设置，换人打开就变</td>
+</tr>
+<tr>
+<td><code>Objects/</code>、<code>Listings/</code></td>
+<td>忽略</td>
+<td>编译产物，可随时重建</td>
+</tr>
+<tr>
+<td><code>*.uvguix.*</code></td>
+<td>忽略</td>
+<td>窗口布局，带用户名，每人不同</td>
+</tr>
+<tr>
+<td><code>*.hex</code>、<code>*.axf</code></td>
+<td>忽略（发版可另存）</td>
+<td>产物，不该进版本库</td>
+</tr>
+</tbody></table>
+<p>在工程根目录放一个 <code>.gitignore</code>：</p>
+<pre><code class="language-gitignore"># Keil 编译产物
+Objects/
+Listings/
+*.hex
+*.axf
+*.map
+*.lst
+*.dep
+*.crf
+*.o
+*.d
+
+# µVision 本机布局与备份
+*.uvguix.*
+*.uvgui.*
+*.bak
+
+# 个人调试设置（团队要共享断点时可去掉这一行）
+*.uvoptx
+</code></pre>
+
+<section class="callout note"><h3 class="callout-title">换电脑打不开工程的两个原因</h3><ol>
+<li><strong>Include Paths 写成了绝对路径</strong>（<code>D:\mcu\...</code>）。在魔术棒 C/C++ 里改成 <code>.\\Start;.\\Library;.\\User</code> 这种相对路径，工程才能跟着文件夹走。</li>
+<li><strong>只提交了 .uvprojx，没提交库文件</strong>。别人 clone 下来缺 <code>stm32f10x_gpio.c</code>，一编译全是 <code>Undefined symbol</code>。库文件要么一起提交，要么在 README 里写清从哪下载哪个版本。</li>
+</ol>
+</section>
+<h3>9.9 把常用工具塞进菜单</h3>
+<p><code>Tools → Customize Tools Menu</code> 可以添加外部程序。常用组合：</p>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>Command</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Git Bash</td>
+<td><code>C:\Program Files\Git\bin\bash.exe</code></td>
+<td>不离开 Keil 就能提交代码</td>
+</tr>
+<tr>
+<td>串口助手</td>
+<td>你自己的串口工具 exe</td>
+<td>看 printf 输出</td>
+</tr>
+<tr>
+<td>CubeProgrammer</td>
+<td><code>STM32CubeProgrammer.exe</code></td>
+<td>芯片被锁时全片擦除</td>
+</tr>
+</tbody></table>
+<p>Command 路径里有空格要加英文引号。</p>
+<h3>9.10 快捷键总表（打印出来贴显示器边上）</h3>
+<table>
+<thead>
+<tr>
+<th>快捷键</th>
+<th>功能</th>
+<th>快捷键</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>F7</code></td>
+<td>编译</td>
+<td><code>F8</code></td>
+<td>下载</td>
+</tr>
+<tr>
+<td><code>Ctrl+F5</code></td>
+<td>进入/退出调试</td>
+<td><code>F5</code></td>
+<td>全速运行</td>
+</tr>
+<tr>
+<td><code>F9</code></td>
+<td>加/删断点</td>
+<td><code>Ctrl+B</code></td>
+<td>断点管理窗口</td>
+</tr>
+<tr>
+<td><code>F10</code></td>
+<td>单步跳过</td>
+<td><code>F11</code></td>
+<td>单步进入</td>
+</tr>
+<tr>
+<td><code>Ctrl+F11</code></td>
+<td>跳出函数</td>
+<td><code>Ctrl+F10</code></td>
+<td>运行到光标</td>
+</tr>
+<tr>
+<td><code>F12</code></td>
+<td>跳到定义</td>
+<td><code>Ctrl+G</code></td>
+<td>跳到指定行</td>
+</tr>
+<tr>
+<td><code>Ctrl+F</code></td>
+<td>当前文件查找</td>
+<td><code>Ctrl+Shift+F</code></td>
+<td>全工程查找</td>
+</tr>
+<tr>
+<td><code>Ctrl+H</code></td>
+<td>替换</td>
+<td><code>Ctrl+Space</code></td>
+<td>唤起补全</td>
+</tr>
+<tr>
+<td><code>Ctrl+F2</code></td>
+<td>加/删书签</td>
+<td><code>F2</code> / <code>Shift+F2</code></td>
+<td>下/上一个书签</td>
+</tr>
+<tr>
+<td><code>Alt+F7</code></td>
+<td>工程选项（魔术棒）</td>
+<td><code>Ctrl+F7</code></td>
+<td>只编译当前文件</td>
+</tr>
+<tr>
+<td><code>Ctrl+S</code></td>
+<td>保存</td>
+<td><code>Ctrl+Z</code></td>
+<td>撤销</td>
+</tr>
+</tbody></table>
+
+<section class="callout key"><h3 class="callout-title">这一节的取舍</h3><p>不是每个都要会。<strong>先掌握 9.1 的补全、9.2 的 F12 和 9.3 的条件断点</strong>——这三个每天都会用到；仿真、SWO、多 Target 是遇到具体场景再回来查的工具，不用背。</p>
+</section>
+<hr>
+<h2 id="sec-10">10. 练习</h2>
 
 <section class="callout exercise"><h3 class="callout-title">练习 1（配置题）</h3><p>某同学的工程编译报错：</p>
 <pre><code class="language-text">..\User\main.c(5): error: #20: identifier &quot;GPIO_InitTypeDef&quot; is undefined
@@ -747,6 +1136,32 @@ Application running ...
 <p>顺序：先拔插 USB（最省事）→ 再试 <code>Connect under reset</code>（覆盖最多情况）→ 最后查线。</p>
 </div></details>
 
+<section class="callout exercise"><h3 class="callout-title">练习 5（条件断点）</h3><p>下面这段代码在第 500 次循环时，<code>sum</code> 突然变成一个离谱的大数：</p>
+<pre><code class="language-c">for (i = 0; i &lt; 1000; i++)
+{
+    sum += buf[i];
+}
+</code></pre>
+<p>你不想按 499 次 F5。用条件断点怎么设？如果断点第一圈就停，最可能是什么原因？</p>
+</section>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><code>Ctrl+B</code> 打开 Breakpoints 窗口，在 Expression 里填 <strong><code>i == 500</code></strong>（或 <code>sum &gt; 某个合理上限</code>），关闭窗口后按 F5，程序会自动跑到第 500 圈停下。</p>
+<p>第一圈就停的原因，几乎都是把 <code>==</code> 写成了 <code>=</code>：<code>i = 500</code> 是赋值，把 i 改成 500 后条件恒为真，于是立刻命中。</p>
+<p>补充：如果想&quot;第 500 圈停下来看，但之后还继续&quot;，在断点窗口里配 <code>Count</code>；想抓&quot;谁改了 sum&quot;，用数据访问断点而不是条件断点。</p>
+</div></details>
+
+<section class="callout exercise"><h3 class="callout-title">练习 6（Git）</h3><p>你把 Keil 工程提交到 GitHub，队友 clone 下来后打开 <code>.uvprojx</code>，一编译报 <code>cannot open source input file &quot;stm32f10x.h&quot;</code>。工程里文件都在。最可能是哪两件事之一？</p>
+<p>如果是你自己这边发现仓库里多了几百个 <code>Objects\*.o</code>，该改哪个文件？</p>
+</section>
+
+<details class="answer"><summary>参考答案</summary><div class="answer-body"><p><strong>两个可能</strong>：</p>
+<ol>
+<li>队友的 Include Paths 指向的是你电脑上的绝对路径（<code>D:\mcu\...</code>），他那边没有这个目录。改成 <code>.\Start;.\Library;.\User</code> 相对路径再提交。</li>
+<li>库文件根本没提交（<code>.gitignore</code> 误伤了 <code>Library/</code>，或者当初是复制粘贴没加进仓库），队友本地缺 <code>.c/.h</code>。把库文件补进仓库，或在 README 写清依赖。</li>
+</ol>
+<p><strong>忽略编译产物</strong>：工程根目录的 <code>.gitignore</code> 里加 <code>Objects/</code>、<code>Listings/</code>、<code>*.uvguix.*</code>。已经误提交的产物要先 <code>git rm -r --cached Objects</code> 从索引里移除，再提交一次 <code>.gitignore</code>——光加 <code>.gitignore</code> 不会让已跟踪的文件自动消失。</p>
+</div></details>
+
 <section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
 <li><input disabled="" type="checkbox"> 我能说出 Keil 界面五个区域各自的作用</li>
 <li><input disabled="" type="checkbox"> 我能不看笔记说出魔术棒五个必配页和它们各管什么</li>
@@ -754,6 +1169,9 @@ Application running ...
 <li><input disabled="" type="checkbox"> 我能从 <code>Program Size</code> 四个数字算出 Flash 和 RAM 占用</li>
 <li><input disabled="" type="checkbox"> 报 <code>No target connected</code> 时我知道按什么顺序排查</li>
 <li><input disabled="" type="checkbox"> 我完成了一次&quot;建工程 → 编译 → 下载 → 断点 → 看变量&quot;的完整闭环</li>
+<li><input disabled="" type="checkbox"> 我打开了代码补全，能用 <code>Ctrl+Space</code> 和 <code>Ctrl+F2</code> 书签</li>
+<li><input disabled="" type="checkbox"> 我会用 <code>Ctrl+B</code> 设一个条件断点，并知道 <code>=</code> 和 <code>==</code> 的坑</li>
+<li><input disabled="" type="checkbox"> 我知道哪些 Keil 文件该提交、哪些该写进 <code>.gitignore</code></li>
 </ul>
 </section>
 

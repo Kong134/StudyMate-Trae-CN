@@ -35,12 +35,12 @@
     },
     {
       "id": "s2b",
-      "title": "Keil MDK5 上手：建工程、配置选项、下载与在线调试",
+      "title": "Keil MDK5 上手：建工程、配置、下载调试与工作常用功能",
       "type": "practice",
       "layer": 1,
       "status": "in_progress",
-      "estimated": 90,
-      "summary": "能在 Keil 里从零建出 F103 标准库工程，配对 Device/C/C++/Debug/Utilities 关键选项，编译下载并打断点看变量，遇到常见报错能按四层顺序定位",
+      "estimated": 120,
+      "summary": "能在 Keil 里从零建出 F103 标准库工程，配对魔术棒关键选项，编译下载并打断点看变量；会用代码补全、书签、条件断点、软件仿真、SWO 打印、多 Target 和 Git 忽略规则",
       "prereq": [
         "s2"
       ],
