@@ -1,0 +1,283 @@
+{
+  "id": "stm32-embedded",
+  "title": "STM32 嵌入式开发",
+  "subtitle": "从蓝板点灯到能面试：F103 + HAL 库全流程",
+  "goal": "能独立完成 STM32F103C8T6 的常见外设开发（GPIO、时钟、中断、定时器、串口、I2C、SPI、ADC），做出一个可演示的综合项目，并在面试中说清每个外设的原理与配置取舍",
+  "level": "有 C 语言基础，嵌入式零基础",
+  "hoursPerWeek": 8,
+  "status": "active",
+  "createdAt": "2026-11-21",
+  "nodes": [
+    {
+      "id": "s1",
+      "title": "认识这块蓝板：STM32F103C8T6 与最小系统",
+      "type": "concept",
+      "layer": 1,
+      "status": "done",
+      "estimated": 60,
+      "summary": "能拆读型号每一位的含义，说清最小系统的四要素与存储地图，知道 SWD 下载走的哪两根线",
+      "prereq": [],
+      "lesson": "01-what-is-stm32.md"
+    },
+    {
+      "id": "s2",
+      "title": "第一个工程：CubeIDE + ST-Link 点灯与在线调试",
+      "type": "practice",
+      "layer": 1,
+      "status": "done",
+      "estimated": 90,
+      "summary": "能独立完成新建工程、配置引脚、编译烧写，并用 SWD 打断点看变量，知道程序跑不起来时按什么顺序排查",
+      "prereq": [
+        "s1"
+      ],
+      "lesson": "02-first-project.md",
+      "ref": "30-9-6（串口下载 / Bootloader / 选项字节）"
+    },
+    {
+      "id": "s3",
+      "title": "GPIO 输出：推挽、开漏与 LED 驱动",
+      "type": "practice",
+      "layer": 1,
+      "status": "in_progress",
+      "estimated": 80,
+      "summary": "能解释推挽与开漏的区别，用 PC13 与排针 GPIO 做出跑马灯，知道为什么 LED 常接成低电平点亮",
+      "prereq": [
+        "s2"
+      ],
+      "lesson": "03-gpio-output.md"
+    },
+    {
+      "id": "s4",
+      "title": "GPIO 输入：上下拉、浮空与按键消抖",
+      "type": "practice",
+      "layer": 1,
+      "status": "todo",
+      "estimated": 70,
+      "summary": "能根据外部电路选择上拉或下拉输入，实现带消抖的按键翻转 LED，说明浮空输入为什么会乱跳",
+      "prereq": [
+        "s3"
+      ],
+      "lesson": "04-gpio-input.md"
+    },
+    {
+      "id": "s5",
+      "title": "时钟系统：8MHz 怎么变成 72MHz",
+      "type": "concept",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 80,
+      "summary": "能画出 HSE→PLL→SYSCLK 的路径，算出 AHB/APB1/APB2 各总线频率，并解释 APB1 为什么被限制在 36MHz",
+      "prereq": [
+        "s1"
+      ],
+      "lesson": "05-clock-system.md",
+      "ref": "13-6-1 末尾的 RCC 时钟树部分"
+    },
+    {
+      "id": "s6",
+      "title": "SysTick 与延时：做一个不阻塞的定时框架",
+      "type": "practice",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 60,
+      "summary": "能用 SysTick 产生 1ms 时基，写出非阻塞的周期任务调度，说清 HAL_Delay 为什么不能在中断里调用",
+      "prereq": [
+        "s5"
+      ],
+      "lesson": "06-systick.md"
+    },
+    {
+      "id": "s7",
+      "title": "中断与 NVIC：CPU 被打断时发生了什么",
+      "type": "concept",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 80,
+      "summary": "能说清中断响应流程、优先级分组与抢占/响应优先级，列出中断服务函数里不能做的三件事",
+      "prereq": [
+        "s5"
+      ],
+      "lesson": "07-interrupt-nvic.md"
+    },
+    {
+      "id": "s8",
+      "title": "外部中断 EXTI：按键用中断方式处理",
+      "type": "practice",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 70,
+      "summary": "能把 PA0 配成下降沿触发中断，在回调函数里消抖并翻转 LED，解释按键抖动为什么会触发多次中断",
+      "prereq": [
+        "s7",
+        "s4"
+      ],
+      "lesson": "08-exti.md"
+    },
+    {
+      "id": "s9",
+      "title": "定时器基础：PSC、ARR 与定时中断",
+      "type": "concept",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 80,
+      "summary": "能由 PSC 与 ARR 算出任意定时周期，说清向上/向下/中央对齐计数，用 TIM3 做 1 秒定时中断",
+      "prereq": [
+        "s6"
+      ],
+      "lesson": "09-timer-basics.md",
+      "ref": "13-6-1、14-6-2（定时中断 / 外部时钟 / 时基单元与影子寄存器）"
+    },
+    {
+      "id": "s10",
+      "title": "PWM 输出：占空比、频率与呼吸灯",
+      "type": "practice",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 70,
+      "summary": "能由 ARR 与 CCR 算出频率和占空比，做出可调亮度的呼吸灯，并说明 PWM 驱动舵机与电机时的注意点",
+      "prereq": [
+        "s9"
+      ],
+      "lesson": "10-pwm.md",
+      "ref": "15-6-3、16-6-4（输出比较原理 / PWM 呼吸灯·舵机·直流电机）"
+    },
+    {
+      "id": "s11",
+      "title": "输入捕获与编码器模式",
+      "type": "practice",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 80,
+      "summary": "能用输入捕获测出信号频率与高电平脉宽，用编码器模式读旋钮方向，说明测频法与测周法的适用场景",
+      "prereq": [
+        "s10"
+      ],
+      "lesson": "11-input-capture.md",
+      "ref": "17-6-5 ~ 20-6-8（输入捕获 / PWMI 测占空比 / 编码器接口与测速）"
+    },
+    {
+      "id": "s12",
+      "title": "串口 UART：帧格式、波特率与 printf 重定向",
+      "type": "practice",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 90,
+      "summary": "能算清波特率误差，实现中断收发与环形缓冲区，把 printf 重定向到串口，理解为什么接收要用 DMA 或中断",
+      "prereq": [
+        "s7"
+      ],
+      "lesson": "12-uart.md",
+      "ref": "25-9-1 ~ 30-9-6（串口协议 / USART 外设 / 收发 / 数据包 / 串口下载）"
+    },
+    {
+      "id": "s13",
+      "title": "I2C 总线：开漏、时序与 OLED 显示",
+      "type": "practice",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 90,
+      "summary": "能解释 I2C 为什么要开漏加电阻，读懂起始/应答时序，驱动 OLED 显示文字与数字",
+      "prereq": [
+        "s12"
+      ],
+      "lesson": "13-i2c.md",
+      "ref": "31-10-1 ~ 35-10-5（I2C 协议 / MPU6050 / 软件 I2C / 硬件 I2C）"
+    },
+    {
+      "id": "s14",
+      "title": "SPI 总线：四种模式与外设选型",
+      "type": "practice",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 70,
+      "summary": "能根据 CPOL/CPHA 选出正确模式，用 SPI 读写 Flash 或驱动屏幕，说清 I2C 与 SPI 的取舍",
+      "prereq": [
+        "s13"
+      ],
+      "lesson": "14-spi.md",
+      "ref": "36-11-1 ~ 40-11-5（SPI 协议 / W25Q64 / 软件 SPI / 硬件 SPI）"
+    },
+    {
+      "id": "s15",
+      "title": "ADC 采样与 DMA 搬运",
+      "type": "lab",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 80,
+      "summary": "能配出 12 位 ADC 采样并换算成电压，用 DMA 做多通道连续采样，说明采样时间与信号源阻抗的关系",
+      "prereq": [
+        "s10",
+        "s12"
+      ],
+      "lesson": "15-adc-dma.md",
+      "ref": "21-7-1、22-7-2、23-8-1、24-8-2（ADC 原理与单/多通道 / DMA 数据转运）"
+    },
+    {
+      "id": "s16",
+      "title": "看门狗、低功耗与 Flash 参数存储",
+      "type": "concept",
+      "layer": 5,
+      "status": "todo",
+      "estimated": 60,
+      "summary": "能配置独立看门狗防死机，把配置参数存进 Flash 掉电不丢，说明待机/停机/睡眠三种低功耗模式的区别",
+      "prereq": [
+        "s15"
+      ],
+      "lesson": "16-watchdog-lowpower-flash.md",
+      "ref": "41-12-1 ~ 43-12-3（RTC/BKP）、44-13-1 ~ 45-13-2（PWR/低功耗）、46-14-1 ~ 49-15-2（看门狗/内部 Flash）"
+    },
+    {
+      "id": "s17",
+      "title": "FreeRTOS 入门：任务、队列与信号量",
+      "type": "concept",
+      "layer": 5,
+      "status": "todo",
+      "estimated": 90,
+      "summary": "能创建多个任务并用队列传数据，说清任务栈大小怎么定、优先级怎么排，以及裸机轮询与 RTOS 的取舍",
+      "prereq": [
+        "s16"
+      ],
+      "lesson": "17-freertos.md"
+    },
+    {
+      "id": "s18",
+      "title": "综合项目：环境监测小站",
+      "type": "project",
+      "layer": 6,
+      "status": "todo",
+      "estimated": 180,
+      "summary": "用 OLED + 传感器 + 按键 + 串口上报搭出一个可演示的小系统，能分模块调试并写出一份项目说明",
+      "prereq": [
+        "s15"
+      ],
+      "lesson": "18-capstone-project.md"
+    },
+    {
+      "id": "s19",
+      "title": "面试专题：高频问题与项目讲述",
+      "type": "concept",
+      "layer": 6,
+      "status": "todo",
+      "estimated": 90,
+      "summary": "能用 2 分钟讲清自己的项目，答对中断、时钟、通信协议、内存这几类高频面试题",
+      "prereq": [
+        "s18"
+      ],
+      "lesson": "19-interview.md"
+    },
+    {
+      "id": "s20",
+      "title": "进阶：Bootloader 与 IAP 固件升级",
+      "type": "practice",
+      "layer": 6,
+      "status": "todo",
+      "estimated": 90,
+      "summary": "能划分 Bootloader 与 App 的 Flash 区域，完成关中断、设向量表、设栈顶、跳转四步，用串口分包写入新固件并校验，知道跳转失败与变砖的排查方法",
+      "prereq": [
+        "s16",
+        "s12"
+      ],
+      "lesson": "20-bootloader-iap.md"
+    }
+  ]
+}

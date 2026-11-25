@@ -1,0 +1,24 @@
+# 第三方参考资料（字幕等），体积大，不纳入版本库
+.learning/
+
+# 系统与编辑器杂项
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# 日志与临时文件
+*.log
+*.tmp
+*.bak
+
+# 构建产物（本仓库只存课件与学习记录）
+build/
+Debug/
+Release/
+*.o
+*.d
+*.elf
+*.hex
+*.bin

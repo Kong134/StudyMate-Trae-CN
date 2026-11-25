@@ -1,0 +1,123 @@
+{
+  "id": "digital-electronics",
+  "title": "数字电子技术",
+  "subtitle": "从数制编码到时序电路，把课本上的门和触发器真正连起来",
+  "goal": "能完成进制与编码转换，用布尔代数和卡诺图化简逻辑函数，读懂并设计组合与时序电路，最后用计数器与译码器搭出可工作的数码管秒表",
+  "level": "需要有电路基础，或已学过高中物理电学",
+  "hoursPerWeek": 6,
+  "status": "active",
+  "createdAt": "2026-11-07",
+  "nodes": [
+    {
+      "id": "e1",
+      "title": "数制与码制",
+      "type": "concept",
+      "layer": 1,
+      "status": "in_progress",
+      "estimated": 60,
+      "summary": "能按位权完成二、八、十、十六进制互转，写出 8421BCD、5211、余 3、格雷码，并说清 BCD 与十六进制、补码的区别",
+      "prereq": [],
+      "lesson": "01-number-systems.md"
+    },
+    {
+      "id": "e2",
+      "title": "逻辑代数基础",
+      "type": "concept",
+      "layer": 1,
+      "status": "todo",
+      "estimated": 70,
+      "summary": "能用公式法和卡诺图把逻辑函数化成最简与或式，会处理无关项",
+      "prereq": ["e1"],
+      "lesson": "02-boolean-algebra.md"
+    },
+    {
+      "id": "e3",
+      "title": "逻辑门与电平特性",
+      "type": "concept",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 60,
+      "summary": "能说明 CMOS 门的高低电平、噪声容限、扇出与传输延迟，知道门电路为什么有阈值",
+      "prereq": ["e2"],
+      "lesson": "03-logic-gates.md"
+    },
+    {
+      "id": "e4",
+      "title": "组合逻辑电路的分析与设计",
+      "type": "concept",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 80,
+      "summary": "能从门级电路写出逻辑函数，也能用译码器、数据选择器实现给定功能，识别竞争冒险",
+      "prereq": ["e3"],
+      "lesson": "04-combinational.md"
+    },
+    {
+      "id": "e5",
+      "title": "触发器",
+      "type": "concept",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 70,
+      "summary": "能写出 RS、JK、D、T 触发器的状态方程，区分电平触发与边沿触发，理解建立保持时间",
+      "prereq": ["e3"],
+      "lesson": "05-flip-flops.md"
+    },
+    {
+      "id": "e6",
+      "title": "时序逻辑电路的分析",
+      "type": "concept",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 80,
+      "summary": "能列状态方程与状态转换表，画状态图，判断同步时序电路的功能",
+      "prereq": ["e5"],
+      "lesson": "06-sequential.md"
+    },
+    {
+      "id": "e7",
+      "title": "计数器与寄存器",
+      "type": "practice",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 70,
+      "summary": "能用反馈清零或置数法设计任意模值计数器，搭出移位寄存器并说明串并转换",
+      "prereq": ["e6"],
+      "lesson": "07-counters-registers.md"
+    },
+    {
+      "id": "e8",
+      "title": "存储器与可编程逻辑",
+      "type": "concept",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 70,
+      "summary": "说清 ROM、RAM 与 PLD 的区别，能用 ROM 查表实现组合逻辑，知道为什么查找表能替代门电路",
+      "prereq": ["e4", "e7"],
+      "lesson": "08-memory-pld.md"
+    },
+    {
+      "id": "e9",
+      "title": "项目：74 系列秒计数器",
+      "type": "project",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 120,
+      "summary": "用 74 系列计数器、译码器与数码管搭出 00 到 59 循环的秒表，并能按时钟、计数、显示三级调试",
+      "prereq": ["e7", "e8"],
+      "lesson": "09-project-clock.md"
+    }
+  ],
+  "edges": [
+    { "from": "e1", "to": "e2" },
+    { "from": "e2", "to": "e3" },
+    { "from": "e3", "to": "e4" },
+    { "from": "e3", "to": "e5" },
+    { "from": "e5", "to": "e6" },
+    { "from": "e6", "to": "e7" },
+    { "from": "e4", "to": "e8" },
+    { "from": "e7", "to": "e8" },
+    { "from": "e7", "to": "e9" },
+    { "from": "e8", "to": "e9" }
+  ]
+}

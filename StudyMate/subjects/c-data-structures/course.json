@@ -1,0 +1,111 @@
+{
+  "id": "c-data-structures",
+  "title": "C 语言数据结构",
+  "subtitle": "从内存布局出发，自己把数组、链表、树、哈希表搭出来",
+  "goal": "能手写链表、栈、队列、二叉树与哈希表，并能说明每种结构的时间复杂度取舍",
+  "level": "需要 C 基础（指针、结构体）",
+  "hoursPerWeek": 6,
+  "status": "active",
+  "createdAt": "2026-11-03",
+  "nodes": [
+    {
+      "id": "d1",
+      "title": "数据结构到底是什么：内存、类型与数组",
+      "type": "concept",
+      "layer": 1,
+      "status": "in_progress",
+      "estimated": 50,
+      "summary": "能说出数组为什么 O(1) 随机访问，能解释 sizeof、对齐与越界的后果",
+      "prereq": [],
+      "lesson": "01-memory-and-array.md"
+    },
+    {
+      "id": "d2",
+      "title": "指针、动态内存与手动扩容",
+      "type": "concept",
+      "layer": 1,
+      "status": "todo",
+      "estimated": 55,
+      "summary": "能用 malloc/free 手写一个可增长的动态数组，并知道谁该负责释放",
+      "prereq": ["d1"],
+      "lesson": "02-pointer-and-alloc.md"
+    },
+    {
+      "id": "d3",
+      "title": "链表：把连续打散成节点",
+      "type": "practice",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 60,
+      "summary": "能手写单链表的头插、尾插、删除与反转，并说明它比数组强在哪、弱在哪",
+      "prereq": ["d2"],
+      "lesson": "03-linked-list.md"
+    },
+    {
+      "id": "d4",
+      "title": "栈与队列：用两种结构实现四种操作",
+      "type": "practice",
+      "layer": 2,
+      "status": "todo",
+      "estimated": 55,
+      "summary": "能用数组和链表分别实现栈与队列，能解释循环队列的取模写法",
+      "prereq": ["d2"],
+      "lesson": "04-stack-and-queue.md"
+    },
+    {
+      "id": "d5",
+      "title": "树与二叉树：递归结构",
+      "type": "concept",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 60,
+      "summary": "能手写二叉树的前中后序遍历与层序遍历，能说明递归与显式栈的等价关系",
+      "prereq": ["d3", "d4"],
+      "lesson": "05-binary-tree.md"
+    },
+    {
+      "id": "d6",
+      "title": "哈希表：用空间换时间",
+      "type": "concept",
+      "layer": 3,
+      "status": "todo",
+      "estimated": 55,
+      "summary": "能用拉链法手写哈希表，能解释负载因子与扩容时机",
+      "prereq": ["d3"],
+      "lesson": "06-hash-table.md"
+    },
+    {
+      "id": "d7",
+      "title": "图与两种遍历",
+      "type": "concept",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 60,
+      "summary": "能用邻接表存图，能写出 BFS 与 DFS，并说出各自适合的问题",
+      "prereq": ["d5"],
+      "lesson": "07-graph.md"
+    },
+    {
+      "id": "d8",
+      "title": "项目：手写一个词频统计器",
+      "type": "project",
+      "layer": 4,
+      "status": "todo",
+      "estimated": 120,
+      "summary": "用哈希表 + 链表完成读文件、分词、计数、按频次排序输出，全程不用 STL",
+      "prereq": ["d6", "d7"],
+      "lesson": "08-project-wordcount.md"
+    }
+  ],
+  "edges": [
+    { "from": "d1", "to": "d2" },
+    { "from": "d2", "to": "d3" },
+    { "from": "d2", "to": "d4" },
+    { "from": "d3", "to": "d5" },
+    { "from": "d4", "to": "d5" },
+    { "from": "d3", "to": "d6" },
+    { "from": "d5", "to": "d7" },
+    { "from": "d6", "to": "d8" },
+    { "from": "d7", "to": "d8" }
+  ]
+}
