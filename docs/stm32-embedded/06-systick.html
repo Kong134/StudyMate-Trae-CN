@@ -273,7 +273,7 @@ void Error_Handler(void)
 <h3>4.1 为什么写成减法</h3>
 <p>写成 <code>HAL_GetTick() &gt; last_led + 500</code> 也有同样效果，但有两个隐患：</p>
 <ol>
-<li><strong>溢出</strong>：<code>uwTick</code> 是 32 位无符号数，约 49.7 天溢出归零。归零瞬间 <code>now</code> 变成 0，<code>last + 500</code> 也会按模运算绕回；这个写法最多在跨零点时错一次（可能提前或延后触发），之后会自己恢复，不会停 49 天，但行为不确定。</li>
+<li><strong>溢出</strong>：<code>uwTick</code> 是 32 位无符号数，约 49.7 天溢出归零。归零瞬间 <code>now</code> 变成 0，而 <code>last + 500</code> 可能仍是接近 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>32</mn></msup></mrow><annotation encoding="application/x-tex">2^{32}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span></span></span></span> 的大数；如果 <code>last</code> 离回绕超过 500ms，<code>now &gt; last + 500</code> 会一直为假，最长要等将近 49.7 天才会再次成立。即使没这么极端，也会漏触发一次。</li>
 <li><strong>编译器优化</strong>：某些情况下 <code>last + 500</code> 的计算可能有问题。</li>
 </ol>
 <p>而 <code>HAL_GetTick() - last &gt;= 500</code> 是<strong>无符号减法</strong>，靠模运算自动正确：</p>

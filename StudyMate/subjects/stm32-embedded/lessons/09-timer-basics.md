@@ -236,7 +236,7 @@ $$T_{max} = \frac{65536 \times 65536}{72\,000\,000} = \frac{4\,294\,967\,296}{72
   <text class="sub" x="446" y="176" font-size="10">改 ARR 只在更新事件时生效</text>
   <text class="sub" x="446" y="196" font-size="10">当前周期不受影响，下一周期才变</text>
   <text class="sub" x="446" y="216" font-size="10">→ 调 PWM 占空比时波形平滑</text>
-  <text class="sub" x="446" y="232" font-size="9.5">CubeMX 生成的配置通常 ARPE=1</text>
+  <text class="sub" x="446" y="232" font-size="9.5">本课配置显式 ARPE=1</text>
 </svg>
 
 HAL 里对应的字段由 CubeMX 写进 `Core/Src/tim.c`：
