@@ -164,7 +164,7 @@ int main(void) {
 <section class="callout warn"><h3 class="callout-title">别把 cap 和元素上限搞混</h3><p><code>cap = 5</code> 只能存 4 个元素。如果你按&quot;5 个都能存&quot;来设计，最后一次 push 会把队头和队尾写成同一个值，队列看起来突然变空。分配时多要一格，或者改用 <code>size</code> 计数方案。</p>
 </section>
 <h2 id="sec-4">链表版：不用扩容，但要管好尾指针</h2>
-<p>栈的链表版只用头插和头删，两边都是 O(1)，最省心。队列的链表版需要在尾部插入，所以必须维护 <code>tail</code>；出队时如果删掉了最后一个节点，<code>tail</code> 必须同步置 <code>NULL</code>，否则它就成了悬空指针。</p>
+<p>栈的链表版只用头插和头删，两边都是 O(1)，最省心。队列的链表版需要在尾部插入，所以必须维护 <code>tail</code>；出队时如果删掉了最后一个节点，<code>tail</code> 必须同步置 <code>NULL</code>，否则它就成了悬空指针。使用前先 <code>lq_init(&amp;q)</code> 把两个指针清零，否则它们是未初始化的野指针。</p>
 <pre><code class="language-c">typedef struct QNode {
     int val;
     struct QNode *next;
@@ -174,6 +174,10 @@ typedef struct {
     QNode *head;    /* 出队端 */
     QNode *tail;    /* 入队端 */
 } LQueue;
+
+void lq_init(LQueue *q) {
+    q-&gt;head = q-&gt;tail = NULL;
+}
 
 int lq_push(LQueue *q, int v) {
     QNode *n = malloc(sizeof *n);

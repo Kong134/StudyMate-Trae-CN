@@ -61,7 +61,7 @@ printf(&quot;%d\n&quot;, a[2]);       /* 完全等价，a[i] 就是 *(a + i) */
 <section class="callout key"><h3 class="callout-title">一句话记住</h3><p><code>a[i]</code> ≡ <code>*(a + i)</code>。所以&quot;随机访问是 O(1)&quot;不是魔法，是一次乘法和一次加法。</p>
 </section>
 
-<section class="callout warn"><h3 class="callout-title">越界不是&quot;多读一点&quot;</h3><p>C 不检查下标。<code>a[10]</code> 会老老实实算出 <code>首地址 + 40</code> 字节，然后读写那块内存——那里可能是别的变量、可能是函数返回地址。读出来是垃圾值还只是小事，写进去就是未定义行为（UB），可能当场崩，也可能在三天后崩。</p>
+<section class="callout warn"><h3 class="callout-title">越界不是&quot;多读一点&quot;</h3><p>C 不检查下标。<code>a[10]</code> 会老老实实算出 <code>首地址 + 40</code> 字节，然后读写那块内存——那里可能是别的变量、可能是函数返回地址。读和写都是未定义行为（UB）：读出来可能是垃圾值，也可能当场崩溃，或者被优化器按&quot;不会发生&quot;处理；写进去还可能改掉别的变量或返回地址。</p>
 </section>
 <p><code>sizeof</code> 能帮你在编译期确认布局：</p>
 <pre><code class="language-c">int a[5];

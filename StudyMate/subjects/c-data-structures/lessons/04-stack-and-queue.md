@@ -164,7 +164,7 @@ int main(void) {
 
 ## 链表版：不用扩容，但要管好尾指针
 
-栈的链表版只用头插和头删，两边都是 O(1)，最省心。队列的链表版需要在尾部插入，所以必须维护 `tail`；出队时如果删掉了最后一个节点，`tail` 必须同步置 `NULL`，否则它就成了悬空指针。
+栈的链表版只用头插和头删，两边都是 O(1)，最省心。队列的链表版需要在尾部插入，所以必须维护 `tail`；出队时如果删掉了最后一个节点，`tail` 必须同步置 `NULL`，否则它就成了悬空指针。使用前先 `lq_init(&q)` 把两个指针清零，否则它们是未初始化的野指针。
 
 ```c
 typedef struct QNode {
@@ -176,6 +176,10 @@ typedef struct {
     QNode *head;    /* 出队端 */
     QNode *tail;    /* 入队端 */
 } LQueue;
+
+void lq_init(LQueue *q) {
+    q->head = q->tail = NULL;
+}
 
 int lq_push(LQueue *q, int v) {
     QNode *n = malloc(sizeof *n);

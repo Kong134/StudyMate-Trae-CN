@@ -22,7 +22,7 @@
     <span class="badge ghost">80 分钟</span>
     
   </div>
-  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 先看一个具体场景</a></li><li><a href="#sec-2">2. 中断响应：硬件替你做的 12 次压栈</a></li><li><a href="#sec-3">3. 向量表：中断的&amp;quot;电话簿&amp;quot;</a></li><li><a href="#sec-4">4. NVIC：中断的调度中心</a></li><li><a href="#sec-5">5. ISR 里绝对不能做的三件事</a></li><li><a href="#sec-6">6. volatile：中断里最容易漏的关键字</a></li><li><a href="#sec-7">7. 临界区：暂时关掉中断</a></li><li><a href="#sec-8">8. 一个完整例子：把 s6 的按键搬到中断</a></li><li><a href="#sec-9">9. 动手项目</a></li><li><a href="#sec-10">附：PPT 原图对照</a></li><li><a href="#sec-11">10. 本课小结</a></li></ol></nav>
+  <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">这一课要解决的问题</a></li><li><a href="#sec-1">1. 先看一个具体场景</a></li><li><a href="#sec-2">2. 中断响应：硬件替你做的 8 字压栈（约 12 个周期）</a></li><li><a href="#sec-3">3. 向量表：中断的&amp;quot;电话簿&amp;quot;</a></li><li><a href="#sec-4">4. NVIC：中断的调度中心</a></li><li><a href="#sec-5">5. ISR 里绝对不能做的三件事</a></li><li><a href="#sec-6">6. volatile：中断里最容易漏的关键字</a></li><li><a href="#sec-7">7. 临界区：暂时关掉中断</a></li><li><a href="#sec-8">8. 一个完整例子：把 s6 的按键搬到中断</a></li><li><a href="#sec-9">9. 动手项目</a></li><li><a href="#sec-10">附：PPT 原图对照</a></li><li><a href="#sec-11">10. 本课小结</a></li></ol></nav>
   <h2 id="sec-0">这一课要解决的问题</h2>
 
 <section class="callout goal"><h3 class="callout-title">本课目标</h3><p>读完你能：说出中断从触发到返回的完整流程；解释向量表是什么、放在哪；用抢占优先级和子优先级排出任意两个中断的执行顺序；说出中断服务函数里不能做的三件事，并解释原因。</p>
@@ -44,7 +44,7 @@
 <p>你只负责第 3 步，但理解 1、2 才能解释&quot;为什么中断有延迟&quot;&quot;为什么会丢事件&quot;。</p>
 </section>
 <hr>
-<h2 id="sec-2">2. 中断响应：硬件替你做的 12 次压栈</h2>
+<h2 id="sec-2">2. 中断响应：硬件替你做的 8 字压栈（约 12 个周期）</h2>
 <p>这是本课最硬核的部分，但也是最能体现&quot;懂原理&quot;的部分。</p>
 <svg class="diagram" viewBox="0 0 880 400" xmlns="http://www.w3.org/2000/svg">
   <rect class="box" x="14" y="16" width="270" height="120" rx="10"/>
@@ -203,7 +203,7 @@
 <h2 id="sec-4">4. NVIC：中断的调度中心</h2>
 <p>NVIC（Nested Vectored Interrupt Controller，嵌套向量中断控制器）是内核里的一块硬件，负责回答一个问题：<strong>同时来了好几个中断，先处理谁？</strong></p>
 <h3>4.1 优先级：数值越小越高</h3>
-<p>F103 有 60 个可屏蔽中断，每个有一个 8 位优先级寄存器，但 ST 只实现了<strong>高 4 位</strong>，所以优先级取值 0~15，<strong>0 最高，15 最低</strong>。</p>
+<p>C8T6（中容量）有 43 个可屏蔽中断（大容量型号才有 60 个），每个有一个 8 位优先级寄存器，但 ST 只实现了<strong>高 4 位</strong>，所以优先级取值 0~15，<strong>0 最高，15 最低</strong>。</p>
 
 <section class="callout warn"><h3 class="callout-title">反直觉但必须记牢</h3><p>优先级数字<strong>越小</strong>，级别<strong>越高</strong>。</p>
 <p><code>HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0)</code> = 最高优先级

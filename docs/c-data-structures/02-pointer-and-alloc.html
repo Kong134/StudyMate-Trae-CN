@@ -160,7 +160,7 @@ int main(void) {
 <p><code>vec_push</code> 失败时返回 0，表保持原样，调用者可以决定重试还是报错。<strong>接口用返回值报告失败，而不是直接 abort</strong>。</p>
 <h2 id="sec-5">三个一定会踩的坑</h2>
 <p>第一，<strong>返回局部变量的地址</strong>。<code>int *f(void) { int a[10]; return a; }</code> 函数一返回，栈帧就作废，指针悬空。要返回数组就 <code>malloc</code>，并让调用者 <code>free</code>。</p>
-<p>第二，<strong>free 之后继续用</strong>。<code>free(p)</code> 后 p 的值还是原地址，但内存已还给分配器，可能立刻被下一次 <code>malloc</code> 拿去用。养成 <code>p = NULL</code> 的习惯，至少让误用变成段错误而不是数据错乱。</p>
+<p>第二，<strong>free 之后继续用</strong>。<code>free(p)</code> 后 p 里通常还留着原地址，但按 C 标准这个值已经不确定；内存已还给分配器，可能立刻被下一次 <code>malloc</code> 拿去用。养成 <code>p = NULL</code> 的习惯，至少让误用变成段错误而不是数据错乱。</p>
 <p>第三，<strong>同一个指针 free 两次</strong>。第二次是未定义行为，常见于两个结构体共用一个指针。约定所有权：一块内存只有一个主人，别人只借不还。</p>
 
 <section class="callout key"><h3 class="callout-title">所有权约定</h3><p>函数返回 <code>malloc</code> 出来的指针，就是把所有权交给调用者；只借指针参数用，就绝不 <code>free</code>。写接口时先回答&quot;这块内存谁负责释放&quot;，比事后查泄漏轻松十倍。</p>

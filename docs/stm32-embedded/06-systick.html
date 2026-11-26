@@ -273,7 +273,7 @@ void Error_Handler(void)
 <h3>4.1 为什么写成减法</h3>
 <p>写成 <code>HAL_GetTick() &gt; last_led + 500</code> 也有同样效果，但有两个隐患：</p>
 <ol>
-<li><strong>溢出</strong>：<code>uwTick</code> 是 32 位无符号数，约 49.7 天溢出归零。归零瞬间 <code>now</code> 变成 0，<code>now &gt; last + 500</code> 突然为假，任务会停 49 天。</li>
+<li><strong>溢出</strong>：<code>uwTick</code> 是 32 位无符号数，约 49.7 天溢出归零。归零瞬间 <code>now</code> 变成 0，<code>last + 500</code> 也会按模运算绕回；这个写法最多在跨零点时错一次（可能提前或延后触发），之后会自己恢复，不会停 49 天，但行为不确定。</li>
 <li><strong>编译器优化</strong>：某些情况下 <code>last + 500</code> 的计算可能有问题。</li>
 </ol>
 <p>而 <code>HAL_GetTick() - last &gt;= 500</code> 是<strong>无符号减法</strong>，靠模运算自动正确：</p>

@@ -86,7 +86,7 @@
 </tr>
 </thead>
 <tbody><tr>
-<td>同一律</td>
+<td>重叠律（幂等律）</td>
 <td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mo>+</mo><mi>A</mi><mo>=</mo><mi>A</mi></mrow><annotation encoding="application/x-tex">A+A=A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mo>⋅</mo><mi>A</mi><mo>=</mo><mi>A</mi></mrow><annotation encoding="application/x-tex">A\cdot A=A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span></span></span></span></td>
 </tr>
 <tr>
@@ -130,7 +130,7 @@
 </section>
 <h2 id="sec-4">卡诺图：把&quot;相邻&quot;画成看得见</h2>
 <p>卡诺图每格是一个最小项，行、列都按格雷序 <code>00、01、11、10</code> 排，保证图上相邻（包括首尾绕回）的两格只差一个变量。3 变量是 2×4 共 8 格，行写 A=0/1，列写 BC 的四种组合；4 变量是 4×4 共 16 格，行写 AB、列写 CD，同样按格雷序。</p>
-<p>圈 1 的规则：只圈 1（无关项 X 可当 1）；圈内格数只能是 1、2、4、8；圈必须是矩形，可跨上下、左右边界；圈越大越好、圈数越少越好；同一格可被多个圈共用；每个 1 至少进一个圈。读项时只看圈内不变的变量，值为 0 的写成反变量。</p>
+<p>圈 1 的规则：只圈 1（无关项 X 可当 1）；圈内格数必须是 2 的幂（1、2、4、8、16…），且不能超过卡诺图总格数；圈必须是矩形，可跨上下、左右边界；圈越大越好、圈数越少越好；同一格可被多个圈共用；每个 1 至少进一个圈。读项时只看圈内不变的变量，值为 0 的写成反变量。</p>
 <svg class="diagram" viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="四变量卡诺图，左上四格圈成 A 反 C 反，右下四格圈成 AC">
   <g font-family="-apple-system, 'Microsoft YaHei', sans-serif" font-size="13">
     <text class="label" x="8" y="24">四变量卡诺图：F = Σm(0,1,4,5,10,11,14,15)</text>

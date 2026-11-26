@@ -122,16 +122,35 @@ void inorder_iter(const TreeNode *root) {
 层序不是深度优先，它要的是"先第一层、再第二层"。做法是队列：根入队，然后每次出队一个节点，把它的孩子依次入队。这样同一层的节点会在同一批里被处理。
 
 ```c
+#include <stdlib.h>   /* malloc / realloc / free */
+
+static int enqueue(const TreeNode ***queue, size_t *cap, size_t *tail, const TreeNode *node) {
+    if (*tail == *cap) {                 /* 满了就翻倍 */
+        size_t ncap = *cap * 2;
+        const TreeNode **nq = realloc(*queue, ncap * sizeof **queue);
+        if (!nq) return 0;
+        *queue = nq;
+        *cap = ncap;
+    }
+    (*queue)[(*tail)++] = node;
+    return 1;
+}
+
 void level_order(const TreeNode *root) {
-    const TreeNode *queue[64];
-    int head = 0, tail = 0;
-    if (root) queue[tail++] = root;
+    if (!root) return;
+
+    size_t cap = 16, head = 0, tail = 0;
+    const TreeNode **queue = malloc(cap * sizeof *queue);
+    if (!queue) return;
+
+    enqueue(&queue, &cap, &tail, root);
     while (head < tail) {
         const TreeNode *t = queue[head++];
         printf("%d ", t->val);
-        if (t->left)  queue[tail++] = t->left;
-        if (t->right) queue[tail++] = t->right;
+        if (t->left  && !enqueue(&queue, &cap, &tail, t->left))  break;
+        if (t->right && !enqueue(&queue, &cap, &tail, t->right)) break;
     }
+    free(queue);
 }
 ```
 

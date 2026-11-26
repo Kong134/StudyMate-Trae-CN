@@ -119,16 +119,35 @@ void inorder_iter(const TreeNode *root) {
 </section>
 <h2 id="sec-4">层序遍历：用队列按层扫</h2>
 <p>层序不是深度优先，它要的是&quot;先第一层、再第二层&quot;。做法是队列：根入队，然后每次出队一个节点，把它的孩子依次入队。这样同一层的节点会在同一批里被处理。</p>
-<pre><code class="language-c">void level_order(const TreeNode *root) {
-    const TreeNode *queue[64];
-    int head = 0, tail = 0;
-    if (root) queue[tail++] = root;
+<pre><code class="language-c">#include &lt;stdlib.h&gt;   /* malloc / realloc / free */
+
+static int enqueue(const TreeNode ***queue, size_t *cap, size_t *tail, const TreeNode *node) {
+    if (*tail == *cap) {                 /* 满了就翻倍 */
+        size_t ncap = *cap * 2;
+        const TreeNode **nq = realloc(*queue, ncap * sizeof **queue);
+        if (!nq) return 0;
+        *queue = nq;
+        *cap = ncap;
+    }
+    (*queue)[(*tail)++] = node;
+    return 1;
+}
+
+void level_order(const TreeNode *root) {
+    if (!root) return;
+
+    size_t cap = 16, head = 0, tail = 0;
+    const TreeNode **queue = malloc(cap * sizeof *queue);
+    if (!queue) return;
+
+    enqueue(&amp;queue, &amp;cap, &amp;tail, root);
     while (head &lt; tail) {
         const TreeNode *t = queue[head++];
         printf(&quot;%d &quot;, t-&gt;val);
-        if (t-&gt;left)  queue[tail++] = t-&gt;left;
-        if (t-&gt;right) queue[tail++] = t-&gt;right;
+        if (t-&gt;left  &amp;&amp; !enqueue(&amp;queue, &amp;cap, &amp;tail, t-&gt;left))  break;
+        if (t-&gt;right &amp;&amp; !enqueue(&amp;queue, &amp;cap, &amp;tail, t-&gt;right)) break;
     }
+    free(queue);
 }
 </code></pre>
 <p>输出是 <code>1 2 3 4 5 6 7</code>。如果想按层换行，得记录每层的大小：进循环前先取 <code>level_size = tail - head</code>，只处理这么多节点，处理完打印一个换行。这个技巧在&quot;求树的宽度&quot;&quot;按层收集节点&quot;里反复出现。</p>

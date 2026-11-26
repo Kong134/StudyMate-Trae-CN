@@ -1428,9 +1428,13 @@ void Boot_Main(void)
                 JumpToApp(APP_ADDR);      /* 成功则永不返回 */
             } else {
                 BSP_UartPrintf("verify fail, stay\r\n");
+                Boot_MarkInvalid();       /* App 区已被擦/写坏，绝不能跳 */
+                while (1) { }
             }
         } else {
             BSP_UartPrintf("recv fail, stay\r\n");
+            Boot_MarkInvalid();
+            while (1) { }
         }
     }
 

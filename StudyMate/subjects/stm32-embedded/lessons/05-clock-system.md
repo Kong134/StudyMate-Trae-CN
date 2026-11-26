@@ -274,7 +274,7 @@ void Error_Handler(void)
 }
 ```
 
-调用顺序不能反：`main()` 里必须先 `HAL_Init()` 再 `SystemClock_Config()`。`HAL_Init()` 先按复位默认的 HSI 8MHz 把 SysTick 配好，`SystemClock_Config()` 换主频时，`HAL_RCC_ClockConfig()` 内部会重算 SysTick 重装值。反过来写，SysTick 还按 8MHz 计数，`HAL_Delay(1000)` 实际会等 9 秒。
+调用顺序不能反：`main()` 里必须先 `HAL_Init()` 再 `SystemClock_Config()`。`HAL_Init()` 负责 Flash 预取、NVIC 优先级分组和 SysTick 时基；`SystemClock_Config()` 里 HSE/PLL 的启动和切换带超时等待，依赖 `HAL_GetTick()` 的毫秒计数。先换时钟再 `HAL_Init()`，超时计数可能还没跑起来，配置会卡在等待循环里或超时失败。
 
 逐项解释"为什么这么配、为什么不选别的"：
 

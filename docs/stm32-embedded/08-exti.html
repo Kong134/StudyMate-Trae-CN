@@ -177,7 +177,7 @@ void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin)
 </tbody></table>
 
 <section class="callout note"><h3 class="callout-title">为什么选下降沿而不是双边沿</h3><p>按键按下和松开都会产生抖动，如果配双边沿，一次按键会触发两组中断，处理逻辑要区分&quot;这是按下还是松开&quot;，复杂度翻倍。</p>
-<p>只配下降沿（按下），逻辑最简单：<strong>每次中断就是一次&quot;用户想操作&quot;</strong>。松开的抖动直接被硬件过滤掉。</p>
+<p>只配下降沿（按下），逻辑最简单：<strong>每次下降沿都可能是一次&quot;用户想操作&quot;</strong>。注意边沿检测不等于防抖：按下时触点弹跳仍可能产生多个下降沿；松手时如果触点弹跳重新闭合，也会产生下降沿。所以还要靠 20ms 时间窗或暂时关闭 EXTI 来防抖。</p>
 <p>需要检测&quot;按住多久&quot;时，才需要在中断里记下时间戳。</p>
 </section>
 

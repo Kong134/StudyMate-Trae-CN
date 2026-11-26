@@ -67,7 +67,7 @@ int each_word(FILE *fp, int (*sink)(const char *, void *), void *ctx) {
 }
 ```
 
-`(unsigned char)c` 不能省：`isalpha` 要求 `unsigned char` 或 `EOF`，传负值在部分实现上是未定义行为。UTF-8 中文不会被 `isalpha` 认成字母，本项目只处理 ASCII 单词。
+`(unsigned char)c` 不能省：`isalpha` 要求参数是 `unsigned char` 能表示的值或 `EOF`，传负值按 C 标准就是未定义行为。UTF-8 中文不会被 `isalpha` 认成字母，本项目只处理 ASCII 单词。
 
 ## 第三步：哈希表计数
 

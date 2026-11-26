@@ -25,7 +25,7 @@
   <nav class="toc"><div class="toc-title">本页目录</div><ol><li><a href="#sec-0">先说结论</a></li><li><a href="#sec-1">邻接表：每个顶点挂一条链</a></li><li><a href="#sec-2">BFS：队列一层层扩散</a></li><li><a href="#sec-3">DFS：递归或显式栈</a></li><li><a href="#sec-4">两种遍历，各管一类问题</a></li><li><a href="#sec-5">四个容易翻车的地方</a></li><li><a href="#sec-6">练习</a></li></ol></nav>
   <h2 id="sec-0">先说结论</h2>
 <p>图就是&quot;顶点 + 边&quot;。它比树自由：没有根、可以有环、一个点能连很多个。存图可用邻接矩阵或邻接表；稀疏图（E 远小于 V²）用邻接表更省内存，也是本课用的方式。</p>
-<p>遍历图只有两个动作：<strong>BFS 用队列一层层扩散，DFS 用栈（或递归）一条路走到底</strong>。两者时间复杂度都是 O(V+E)，区别在于&quot;先看近的还是先钻深的&quot;，这决定了它们适合完全不同的问题。</p>
+<p>遍历图只有两个动作：<strong>BFS 用队列一层层扩散，DFS 用栈（或递归）一条路走到底</strong>。用邻接表存图时，两者时间复杂度都是 O(V+E)（邻接矩阵是 O(V²)），区别在于&quot;先看近的还是先钻深的&quot;，这决定了它们适合完全不同的问题。</p>
 <h2 id="sec-1">邻接表：每个顶点挂一条链</h2>
 <p><code>Graph</code> 有一个 <code>AdjNode **heads</code>，<code>heads[i]</code> 是顶点 i 的邻居链。加边往链头插，O(1)。无向图一条边存两次，空间 O(V+E)。</p>
 <svg class="diagram" viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="有向图的邻接表表示">
@@ -209,7 +209,7 @@ void dfs(const Graph *g, int start) {
 </code></pre>
 <p>第四，<strong>递归深度</strong>。链状图（0→1→2→…）的 DFS 递归深度等于 V，十万个顶点会爆栈；这种输入要改显式栈。</p>
 
-<section class="callout key"><h3 class="callout-title">一句话记住</h3><p>BFS = 队列 + 按距离扩散，天然求最短路；DFS = 栈/递归 + 一条路走到底，天然做回溯和环检测。两者都是 O(V+E)，差别只在访问顺序。</p>
+<section class="callout key"><h3 class="callout-title">一句话记住</h3><p>BFS = 队列 + 按距离扩散，天然求最短路；DFS = 栈/递归 + 一条路走到底，天然做回溯和环检测。用邻接表时两者都是 O(V+E)，差别只在访问顺序。</p>
 </section>
 <h2 id="sec-6">练习</h2>
 

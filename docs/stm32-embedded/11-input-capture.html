@@ -257,7 +257,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
   if (htim-&gt;Instance == TIM2 &amp;&amp; htim-&gt;Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
     uint32_t now = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);  /* 抄走 CCR1 */
-    g_capture_period = now - s_last;     /* 无符号减法，绕一圈也能算对 */
+    g_capture_period = (now - s_last) &amp; 0xFFFFU;  /* 取低 16 位，绕一圈也能算对 */
     s_last  = now;
     s_ready = 1;
   }
@@ -346,11 +346,13 @@ void Error_Handler(void)
 <section class="callout note"><h3 class="callout-title">哪些代码&quot;故意没写&quot;</h3><p><code>MX_TIM2_Init()</code>、<code>HAL_TIM_IC_MspInit()</code>、<code>SystemClock_Config()</code> 都是 CubeMX 生成的：前者写 PSC/ARR/CCMR，<code>MspInit</code> 负责开 TIM2 时钟、把 PA0 配成复用功能、连 NVIC，后者配 72MHz。<strong>手写它们没有好处，最容易漏的是开时钟</strong>——漏了的现象是 <code>Start_IT</code> 返回 <code>HAL_ERROR</code>、中断永远不进。要改的是参数（PSC/ARR/Filter），不是这些函数本身。</p>
 </section>
 
-<section class="callout note"><h3 class="callout-title">为什么 `now - s_last` 不用管溢出</h3><p>因为用的是<strong>无符号 32 位整数</strong>。假设 <code>s_last = 65500</code>，<code>now</code> 绕回后是 <code>300</code>：</p>
-<pre><code>300 - 65500 = 4294902096（32 位下）
+<section class="callout note"><h3 class="callout-title">为什么 `(now - s_last) &amp; 0xFFFF` 能处理溢出</h3><p>CNT/CCR 只有 16 位，但 <code>HAL_TIM_ReadCapturedValue()</code> 返回的是 <code>uint32_t</code>。假设 <code>s_last = 65500</code>，<code>now</code> 绕回后是 <code>300</code>：</p>
+<pre><code>(300 - 65500) &amp; 0xFFFF
+= 4294902096 &amp; 0xFFFF
+= 336
 </code></pre>
-<p>但它低 16 位正好是 <code>300 - 65500 + 65536 = 336</code>，这就是真实经过的计数。只要两次捕获之间<strong>最多绕一圈</strong>，结果就是对的——这也是为什么 ARR 要设成 65535、并且要保证信号频率不低于量程下限。</p>
-<p>这个技巧叫&quot;无符号回绕减法&quot;，定时器、DMA 计数器里到处都是，面试也常问。</p>
+<p>直接相减会得到 4294902096；<code>&amp; 0xFFFFU</code> 取低 16 位，才是真实经过的计数。只要两次捕获之间<strong>最多绕一圈</strong>，结果就是对的——这也是为什么 ARR 要设成 65535、并且要保证信号频率不低于量程下限。</p>
+<p>这个技巧叫&quot;无符号回绕减法 + 掩码&quot;，定时器、DMA 计数器里到处都是，面试也常问。</p>
 </section>
 <hr>
 <h2 id="sec-5">5. 同时量高电平宽度：PWMI 模式</h2>

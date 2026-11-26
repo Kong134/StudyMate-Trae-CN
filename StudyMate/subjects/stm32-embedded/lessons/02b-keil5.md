@@ -227,7 +227,7 @@ int main(void)
     /* 第 2 步：填配置。PC13 推挽输出 */
     GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_13;      /* 要配的引脚 */
     GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_Out_PP; /* 推挽输出（能输出高低电平） */
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz; /* 输出翻转速度 */
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;  /* 输出翻转速度；PC13 手册上限 2MHz */
     GPIO_Init(GPIOC, &GPIO_InitStructure);            /* 把配置写进寄存器 */
 
     /* 第 3 步：先熄灭。蓝板 LED 是低电平点亮，所以先给高电平 */
@@ -246,7 +246,7 @@ int main(void)
 ::: note 为什么 PC13 是低电平点亮
 蓝板上的 LED 一端接 3.3V，另一端接 PC13。PC13 输出 0V 时，两端有 3.3V 压差，电流流过 LED → 亮；输出 3.3V 时两端电压相等，没有电流 → 灭。这是硬件接法决定的，不是软件习惯。
 
-另外 PC13/14/15 在 F103 手册里属于**低驱动引脚**（最大 3mA、2MHz），演示点灯用 50MHz 没问题，但正式产品里别用它驱动大电流负载。
+另外 PC13/14/15 在 F103 手册里属于**低驱动引脚**（最大 3mA、2MHz）。演示点灯用 2MHz 足够，正式产品里也别用它驱动大电流负载。
 :::
 
 ---

@@ -312,7 +312,7 @@ SemaphoreHandle_t xKeySem      = NULL;
 
 void App_CommInit(void)
 {
-    /* 5 个元素 × 6 字节（结构体对齐后 6 字节），给显示端留 500ms 缓冲 */
+    /* 5 个元素 × 4 字节（两个 int16），给显示端留 500ms 缓冲 */
     xSensorQueue = xQueueCreate(5, sizeof(SensorMsg_t));
 
     /* 按键事件最多 5 个未处理，再多说明显示任务已经卡死 */

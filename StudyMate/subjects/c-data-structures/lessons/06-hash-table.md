@@ -102,6 +102,7 @@ typedef struct Entry {
     struct Entry *next;
 } Entry;
 
+/* 使用前必须零初始化：HashTable ht = {0}; 否则 nbuckets 是垃圾值 */
 typedef struct {
     Entry **buckets;
     size_t nbuckets;

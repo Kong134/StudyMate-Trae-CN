@@ -381,7 +381,7 @@ RCC-&gt;CFGR |= RCC_CFGR_SW_PLL;                       // 切 SYSCLK 到 PLL
 </ul>
 
 <section class="callout warn"><h3 class="callout-title">一个非常经典的现象：程序慢了大约 9 倍</h3><p>如果晶振没起振（虚焊、负载电容不对、或者你根本没焊晶振），<code>HAL_RCC_OscConfig()</code> 会返回 <code>HAL_ERROR</code>。此时 PLL 无法工作，芯片<strong>回落到内部 HSI 8MHz</strong>继续跑——不报错，不崩溃，只是所有定时都慢了 9 倍。</p>
-<p>字幕第 13 集里作者遇到过一模一样的事：他画的板子把晶振两个脚焊短路了，定时器定 1 秒实际过了 10 秒。</p>
+<p>字幕第 13 集里作者遇到过一模一样的事：他画的板子把晶振两个脚焊短路了，定时器定 1 秒实际过了约 9 秒。</p>
 <p><strong>判断方法</strong>：用调试器看 <code>SystemCoreClock</code> 变量，正常应该是 <code>72000000</code>，如果是 <code>8000000</code>，就是 HSE 起振失败。这个变量是排查时钟问题的第一现场。</p>
 </section>
 <h3><code>MX_GPIO_Init()</code></h3>

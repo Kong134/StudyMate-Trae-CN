@@ -370,7 +370,8 @@ void W25Q_SectorErase(uint32_t addr)
 void W25Q_PageProgram(uint32_t addr, const uint8_t *buf, uint16_t len)
 {
     uint8_t cmd[4];
-    if (len == 0U || len &gt; W25Q64_PAGE_SIZE) return;   /* 跨页会回卷覆盖 */
+    if (len == 0U || len &gt; W25Q64_PAGE_SIZE) return;
+    if ((addr % W25Q64_PAGE_SIZE) + len &gt; W25Q64_PAGE_SIZE) return;  /* 跨页会回卷覆盖 */
 
     W25Q_WriteEnable();
 
@@ -392,7 +393,7 @@ void W25Q_PageProgram(uint32_t addr, const uint8_t *buf, uint16_t len)
 <li><code>CS_LOW()</code> 到 <code>CS_HIGH()</code> 之间<strong>必须一次做完</strong>：W25Q64 把&quot;命令 + 后续数据&quot;当成一个事务，中途放开 CS 会直接终止，命令作废。现象是<strong>只有第一个字节对、后面全错</strong>。</li>
 <li>超时 <code>100</code> 是毫秒。8MHz 下 4 个字节不到 5μs，给 100ms 已经非常宽松；写太小（比如 1）会在调试器暂停后误超时。</li>
 <li>先 <code>Transmit</code> 再 <code>Receive</code> 是为了让代码看起来像&quot;发完再收&quot;，但两次调用之间有几微秒空隙。9MHz 以下 W25Q64 能忍；再快就得换成 <code>HAL_SPI_TransmitReceive</code> 一次收发，否则会<strong>偶发错位</strong>。</li>
-<li>组 ID 时先转 <code>uint32_t</code> 再左移：<code>id[0]</code> 是 <code>uint8_t</code>，不转的话 <code>id[0] &lt;&lt; 16</code> 直接把 8 位数据移出变量范围，结果是 0，现象是<strong>读回 <code>0x000017</code></strong>。</li>
+<li>组 ID 时显式转 <code>uint32_t</code> 再左移：<code>id[0]</code> 是 <code>uint8_t</code>，参与运算本来就会提升成 <code>int</code>，直接 <code>id[0] &lt;&lt; 16</code> 并不会丢位；但显式转换能清楚表达&quot;拼成 32 位 ID&quot;的意图，也避免以后改成更宽的移位时踩坑。</li>
 </ul>
 </section>
 
@@ -809,7 +810,8 @@ void W25Q_SectorErase(uint32_t addr)
 void W25Q_PageProgram(uint32_t addr, const uint8_t *buf, uint16_t len)
 {
     uint8_t cmd[4];
-    if (len == 0U || len &gt; W25Q64_PAGE_SIZE) return;   /* 跨页会回卷覆盖 */
+    if (len == 0U || len &gt; W25Q64_PAGE_SIZE) return;
+    if ((addr % W25Q64_PAGE_SIZE) + len &gt; W25Q64_PAGE_SIZE) return;  /* 跨页会回卷覆盖 */
 
     W25Q_WriteEnable();
 

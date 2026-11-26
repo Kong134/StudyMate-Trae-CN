@@ -76,7 +76,7 @@ int each_word(FILE *fp, int (*sink)(const char *, void *), void *ctx) {
     return 1;
 }
 </code></pre>
-<p><code>(unsigned char)c</code> 不能省：<code>isalpha</code> 要求 <code>unsigned char</code> 或 <code>EOF</code>，传负值在部分实现上是未定义行为。UTF-8 中文不会被 <code>isalpha</code> 认成字母，本项目只处理 ASCII 单词。</p>
+<p><code>(unsigned char)c</code> 不能省：<code>isalpha</code> 要求参数是 <code>unsigned char</code> 能表示的值或 <code>EOF</code>，传负值按 C 标准就是未定义行为。UTF-8 中文不会被 <code>isalpha</code> 认成字母，本项目只处理 ASCII 单词。</p>
 <h2 id="sec-3">第三步：哈希表计数</h2>
 <p>哈希表直接沿用第 6 课的拉链实现：<code>ht_add(ht, word, 1)</code> 找到就加一，找不到就新建 Entry 并复制 key。分词器只负责切词，计数器只负责加一，两者通过 <code>sink</code> 回调连起来，互不依赖。</p>
 <pre><code class="language-c">static int count_word(const char *w, void *ctx) {
