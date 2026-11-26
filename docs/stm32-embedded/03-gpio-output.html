@@ -226,8 +226,7 @@ while (1)
 <p>注意&quot;高阻&quot;说的是<strong>输出级不驱动</strong>，不是引脚和芯片彻底断开：输入通路（Schmitt 触发器）仍然接着，所以开漏脚还能把引脚电平读回来；引脚上还有 ESD 保护二极管。</p>
 <p>打个比方：推挽像用手牢牢按住开关面板（按到上面或下面）；开漏输出 1 就像<strong>松手</strong>——面板停在哪儿，取决于弹簧往哪儿弹。</p>
 
-<section class="callout note"><h3 class="callout-title">F103 的开漏能用内部上拉吗？</h3><p><strong>STM32F103 在输出模式下，内部上拉/下拉是关闭的</strong>；只有输入模式才能选内部上拉。所以 F103 用开漏输出时，高电平必须由<strong>外部上拉电阻</strong>（或总线另一端的上拉）提供。</p>
-<p>换成 F4 等系列，<code>PUPDR</code> 在输出模式下也有效，可以开内部上拉；但它通常只有 30–50 kΩ，上升沿很慢，I2C 这类场合仍要按总线速率选外部上拉。</p>
+<section class="callout note"><h3 class="callout-title">F103 的开漏能用内部上拉吗？</h3><p><strong>STM32F103 在输出模式下，内部上拉/下拉是关闭的</strong>；只有&quot;不输出、只读电平&quot;的配置才能打开内部上拉。所以 F103 用开漏输出时，高电平必须由<strong>外部上拉电阻</strong>（或线另一端的上拉）提供。</p>
 </section>
 
 <section class="callout note"><h3 class="callout-title">亲手验证一次，比看十遍图管用</h3><p>把 PA0 配成 <strong>开漏输出</strong>，<strong>不接任何外部电路</strong>，然后：</p>
@@ -250,14 +249,10 @@ while (1)
 <section class="callout warn"><h3 class="callout-title">这不是&quot;理论风险&quot;</h3><p>新手调试时很常见的操作：&quot;我把两个脚短接，让它们同步&quot;——如果都是推挽且输出相反，第一次上电就烧。</p>
 <p><strong>要短接两个引脚，至少一方必须是开漏</strong>（或都加上拉/串联电阻）。这样最坏情况只是&quot;谁拉低谁赢&quot;，没有短路通路。</p>
 </section>
-<h3>1.4 开漏的第一个用途：多个设备共用一根线</h3>
-<p>先看一个真实问题：I2C 的 OLED 和温度传感器都挂在同一根 SDA 线上。如果两个都用推挽：</p>
-<ul>
-<li>OLED 想输出 1：它把 SDA <strong>主动接到 3.3V</strong></li>
-<li>传感器想输出 0：它把 SDA <strong>主动接到 GND</strong></li>
-</ul>
-<p>这就是 1.3 节的短路，两个管子一起发热。</p>
-<p>开漏把&quot;输出 1&quot;改成了&quot;松手&quot;：</p>
+<h3>1.4 开漏的第一个用途：两个输出接在同一根线上</h3>
+<p>1.3 说过：两个推挽输出接在一起，一个输出 1、一个输出 0，就会短路。</p>
+<p>那如果两个都改成开漏呢？</p>
+<p>把 PA0、PA1 都配成开漏输出，用一根线把它们连起来，再在线上接一个 4.7kΩ 上拉电阻到 3.3V。现在每个脚内部只有一个下开关：</p>
 <table>
 <thead>
 <tr>
@@ -277,19 +272,19 @@ while (1)
 <td>不驱动，线交给上拉电阻</td>
 </tr>
 </tbody></table>
-<p>所以一根开漏总线上只需要三样东西：</p>
+<p>所以一根公共线上只需要三样东西：</p>
 <ol>
 <li>一个上拉电阻，把线默认拉到 3.3V；</li>
-<li>每个设备一个下开关，只能把线拉低；</li>
-<li>所有设备共享同一根线。</li>
+<li>每个脚一个下开关，只能把线拉低；</li>
+<li>两个脚共享同一根线。</li>
 </ol>
-<p>把两个设备的状态列出来：</p>
+<p>把两个脚的状态列出来：</p>
 <table>
 <thead>
 <tr>
-<th>设备 A</th>
-<th>设备 B</th>
-<th>总线电平</th>
+<th>PA0</th>
+<th>PA1</th>
+<th>线电平</th>
 </tr>
 </thead>
 <tbody><tr>
@@ -313,21 +308,21 @@ while (1)
 <td>1（上拉电阻拉高）</td>
 </tr>
 </tbody></table>
-<p>只有<strong>所有设备都松手</strong>，上拉电阻才能把线拉高；只要有一个人拉低，整根线就是低。这个结果和逻辑&quot;与&quot;完全一样（全 1 才为 1），所以叫<strong>线与</strong>（wired-AND）。</p>
+<p>只有<strong>两个脚都松手</strong>，上拉电阻才能把线拉高；只要有一个脚拉低，整根线就是低。这个结果和逻辑&quot;与&quot;完全一样（全 1 才为 1），所以叫<strong>线与</strong>（wired-AND）。</p>
 
-<section class="callout key"><h3 class="callout-title">一句话记法与</h3><p><strong>开漏的 0 = &quot;我拉低&quot;，开漏的 1 = &quot;我不管&quot;。总线高不高，看上拉电阻和有没有人拉低。</strong></p>
+<section class="callout key"><h3 class="callout-title">一句话记法与</h3><p><strong>开漏的 0 = &quot;我拉低&quot;，开漏的 1 = &quot;我不管&quot;。线高不高，看上拉电阻和有没有人拉低。</strong></p>
 </section>
 
-<section class="callout note"><h3 class="callout-title">为什么推挽做不到</h3><p>推挽输出 1 是&quot;主动把线接到 3.3V&quot;，不是松手。两个推挽设备一个输出 1、一个输出 0，就是电源对地短路。</p>
-<p>开漏的关键不是&quot;能输出高&quot;，而是<strong>把输出 1 重新定义成&quot;不干扰别人&quot;</strong>。I2C、CAN、1-Wire 都靠这个规则让多个设备共享一根线。</p>
+<section class="callout note"><h3 class="callout-title">为什么推挽做不到</h3><p>推挽输出 1 是&quot;主动把线接到 3.3V&quot;，不是松手。两个推挽输出一个 1、一个 0，就是电源对地短路。</p>
+<p>开漏的关键不是&quot;能输出高&quot;，而是<strong>把输出 1 重新定义成&quot;不干扰别人&quot;</strong>。需要多个输出共用一根线时，就靠这个规则。</p>
 </section>
-<h3>1.5 开漏的第二个用途：把 3.3V 信号送到 5V 器件</h3>
-<p>场景：你有一个 5V 的继电器模块，输入高电平要 5V；STM32 的 IO 最高只有 3.3V，推挽输出永远给不出 5V。怎么办？</p>
+<h3>1.5 开漏的第二个用途：把 3.3V 变成 5V 高电平</h3>
+<p>场景：外部电路要求高电平是 5V，而 GPIO 推挽最多只能给 3.3V。怎么办？</p>
 <p>用开漏 + 5V 上拉：</p>
 <ul>
 <li>PA0 配成开漏输出；</li>
 <li>PA0 到 5V 之间接一个 4.7kΩ 上拉电阻；</li>
-<li>PA0 再接继电器模块的输入。</li>
+<li>PA0 再接外部电路的控制端。</li>
 </ul>
 <table>
 <thead>
@@ -362,8 +357,8 @@ while (1)
 </ul>
 
 <section class="callout warn"><h3 class="callout-title">5V 上拉不是所有引脚都能用</h3><p>只有数据手册标 <strong>FT（5V 容忍）</strong> 的引脚，才能在&quot;松手&quot;时承受 5V。非 FT 引脚的上保护二极管会把电压钳在 VDD 附近，并可能把电流倒灌进芯片。</p>
-<p>上拉电压也不能超过引脚耐压（FT 引脚通常 5.5V）。模拟输入、部分特殊引脚要单独查手册；不确定就用 3.3V 上拉，或加专用电平转换芯片。</p>
-<p>另外，如果对方是<strong>推挽输出</strong>，不能直接和开漏对接：对方输出高、你输出低时仍然会短路。电平转换只适用于&quot;对方是高阻输入&quot;或&quot;对方也是开漏&quot;的场合。</p>
+<p>上拉电压也不能超过引脚耐压（FT 引脚通常 5.5V）。模拟功能、部分特殊引脚要单独查手册；不确定就用 3.3V 上拉，或加专用电平转换芯片。</p>
+<p>另外，如果对方是<strong>推挽输出</strong>，不能直接和开漏对接：对方输出高、你输出低时仍然会短路。电平转换只适用于&quot;对方只接收这根线的电平、不会主动驱动&quot;或&quot;对方也是开漏&quot;的场合。</p>
 </section>
 <h3>1.6 到底该选哪个</h3>
 <table>
@@ -375,9 +370,9 @@ while (1)
 </tr>
 </thead>
 <tbody><tr>
-<td>点 LED、驱动数字输入</td>
+<td>点 LED、驱动普通负载</td>
 <td>推挽</td>
-<td>要主动输出高电平</td>
+<td>要主动输出高或低电平</td>
 </tr>
 <tr>
 <td>驱动 MOS 管栅极</td>
@@ -385,19 +380,14 @@ while (1)
 <td>要快速充放电</td>
 </tr>
 <tr>
-<td>I²C / CAN 总线</td>
+<td>两个开漏输出接同一根线</td>
 <td>开漏</td>
-<td>多设备共享，必须线与</td>
+<td>实现线与，避免短路</td>
 </tr>
 <tr>
-<td>输出 5V 电平</td>
+<td>输出 5V 高电平</td>
 <td>开漏 + 5V 上拉</td>
 <td>推挽会被 3.3V 限制</td>
-</tr>
-<tr>
-<td>多个 IO 短接做&quot;或&quot;逻辑</td>
-<td>开漏</td>
-<td>避免短路</td>
 </tr>
 <tr>
 <td>不确定</td>
@@ -418,11 +408,11 @@ while (1)
 </div></details></section>
 
 <section class="callout exercise"><h3 class="callout-title">练习 2：判断该用哪种</h3><p>下面四个场景分别该用推挽还是开漏？
-(1) 点亮一个 LED；(2) 和另一个 3.3V 芯片的输入脚相连；(3) 接 I²C 的 OLED 屏；(4) 输出 5V 电平给一个 5V 继电器模块。</p>
+(1) 点亮一个 LED；(2) 和一个只接收电平、不主动驱动的 3.3V 芯片引脚相连；(3) 两个开漏输出脚接在同一根线上；(4) 输出 5V 高电平给一个外部电路。</p>
 
 <details class="answer"><summary>参考答案</summary><div class="answer-body"><p>(1) <strong>推挽</strong>。要主动提供电流。
-(2) <strong>推挽</strong>。对方是纯输入，不会反向驱动，没有短路风险。
-(3) <strong>开漏</strong>。I²C 是共享总线，必须线与。
+(2) <strong>推挽</strong>。对方不会反向驱动，没有短路风险。
+(3) <strong>开漏</strong>。两边都只能拉低或松手，不会短路，能实现线与。
 (4) <strong>开漏 + 5V 上拉</strong>，但有一个前提：这个引脚必须是数据手册标 <strong>FT</strong> 的 5V 容忍引脚。高电平是 5V 上拉电阻提供的，不是 STM32 输出的；STM32 只负责拉低。如果推挽，最多只能输出 3.3V，而且外部 5V 会顺着上管/体二极管倒灌进芯片。</p>
 <p>注意：F103 不是所有 IO 都能接 5V，模拟功能和部分特殊引脚要先查数据手册 pinout 表的 FT 标记；不确定就加电平转换芯片。</p>
 </div></details></section>
@@ -459,8 +449,8 @@ while (1)
 </tr>
 </tbody></table>
 
-<section class="callout warn"><h3 class="callout-title">为什么不能直接用 IO 驱动电机/继电器/蜂鸣器</h3><p>它们的启动电流动辄几十到几百毫安，是 IO 上限的十几倍。直接接上去的结局是：轻则电压被拉垮、单片机复位，重则 MOS 管烧穿。</p>
-<p>正确做法是加一级&quot;开关&quot;：三极管、MOS 管或者专用驱动芯片（L298N、TB6612、ULN2003）。<strong>GPIO 只负责给控制信号，功率由外部器件出</strong>。这条在 s10 驱动直流电机时会再遇到。</p>
+<section class="callout warn"><h3 class="callout-title">为什么不能直接用 IO 驱动大电流负载</h3><p>有些负载的启动电流动辄几十到几百毫安，是 IO 上限的十几倍。直接接上去的结局是：轻则电压被拉垮、单片机复位，重则 MOS 管烧穿。</p>
+<p>正确做法是加一级&quot;开关&quot;：MOS 管。<strong>GPIO 只负责给控制信号，功率由外部器件出</strong>。</p>
 </section>
 <hr>
 <h2 id="sec-3">3. 限流电阻怎么算</h2>
@@ -804,7 +794,7 @@ void HAL_GPIO_WritePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, GPIO_PinState Pin
 <h3>5.1 直接写寄存器有多快</h3>
 <p>调用 <code>HAL_GPIO_WritePin</code> 要经过函数调用、参数检查、分支判断，在 72MHz 下大约几十个时钟周期。</p>
 <p>如果直接写 <code>GPIOA-&gt;BSRR = GPIO_PIN_0;</code>，编译出来是一条 <code>STR</code> 指令，<strong>1~2 个周期</strong>。</p>
-<p>在 8 个灯、120ms 间隔的场景里，这个差别毫秒级，完全无感。但在高速场景（比如软件模拟 SPI 要翻转时钟到 MHz 级），HAL 函数就太慢了，必须直接写寄存器或者用硬件外设。</p>
+<p>在 8 个灯、120ms 间隔的场景里，这个差别毫秒级，完全无感。但在高速场景（比如软件模拟高速时序，要翻转引脚到 MHz 级），HAL 函数就太慢了，必须直接写寄存器或者用硬件外设。</p>
 
 <section class="callout key"><h3 class="callout-title">关键结论</h3><p><strong>这就是&quot;会用库&quot;和&quot;懂单片机&quot;的分界线</strong>：
 能用库函数把功能做出来是一层；知道库函数底下写了哪个寄存器、为什么这么写，是另一层。
@@ -1080,8 +1070,8 @@ void Error_Handler(void)
 <h2 id="sec-7">7. 本课小结</h2>
 <ul>
 <li>推挽 = 上下管都工作，能主动输出高低；开漏 = 只有下管，高电平靠外部上拉。</li>
-<li><strong>共享总线必须开漏</strong>，否则两个设备一个输出高一个输出低就是短路。</li>
-<li>单 IO 绝对上限 25mA，推荐 ≤ 8mA；电机继电器必须外加驱动。</li>
+<li><strong>多个输出共用一根线时必须开漏</strong>，否则一个输出高一个输出低就是短路。</li>
+<li>单 IO 绝对上限 25mA，推荐 ≤ 8mA；大电流负载必须外加驱动。</li>
 <li>限流电阻 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi><mo>=</mo><mo stretchy="false">(</mo><mn>3.3</mn><mo>−</mo><msub><mi>V</mi><mi>F</mi></msub><mo>−</mo><msub><mi>V</mi><mrow><mi>O</mi><mi>L</mi></mrow></msub><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mi>I</mi></mrow><annotation encoding="application/x-tex">R = (3.3 - V_F - V_{OL}) / I</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.00773em;">R</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">3.3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">O</span><span class="mord mathnormal mtight">L</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span></span></span></span>，注意 LED 的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>V</mi><mi>F</mi></msub></mrow><annotation encoding="application/x-tex">V_F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">F</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 可能大于 3.3V。</li>
 <li>蓝板 LED 是共阳极，<strong>低电平点亮</strong>，属于灌电流。</li>
 <li><code>BSRR</code> 是原子置位，<code>ODR</code> 是读-改-写有竞态，HAL 用 BSRR。</li>
@@ -1090,11 +1080,11 @@ void Error_Handler(void)
 
 <section class="callout selfcheck"><h3 class="callout-title">自检</h3><ul>
 <li><input disabled="" type="checkbox"> 我能画出推挽和开漏的内部结构，说出上管的差别</li>
-<li><input disabled="" type="checkbox"> 我能解释 I²C 为什么必须开漏，不这么做的后果是什么</li>
+<li><input disabled="" type="checkbox"> 我能解释两个开漏输出接同一根线时，为什么不会短路</li>
 <li><input disabled="" type="checkbox"> 我能算出一个红色 LED 串 470Ω 时的电流</li>
 <li><input disabled="" type="checkbox"> 我知道单个 IO 的安全电流范围</li>
 <li><input disabled="" type="checkbox"> 我能说出 BSRR 比 ODR 好在哪</li>
-<li><input disabled="" type="checkbox"> 我知道为什么 PC13 不能驱动蜂鸣器</li>
+<li><input disabled="" type="checkbox"> 我知道为什么 PC13 不能驱动大电流负载</li>
 </ul>
 </section>
 <hr>
