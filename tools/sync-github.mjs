@@ -175,8 +175,9 @@ if (!args.noPush) {
 
 const remote = git(['remote', 'get-url', 'origin']).trim();
 const web = remote
-  .replace(/\.git$/, '')
-  .replace(/^git@github\.com:/, 'https://github.com/');
+  .replace(/^ssh:\/\/git@ssh\.github\.com:\d+\//, 'https://github.com/')
+  .replace(/^git@github\.com:/, 'https://github.com/')
+  .replace(/\.git$/, '');
 console.log('');
 console.log(`✓ 已同步 ${hash} · ${message}`);
 console.log(`${web}/commit/${hash}`);
